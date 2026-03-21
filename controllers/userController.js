@@ -31,6 +31,7 @@ const ME_SELECT = `SELECT id, email, display_name, bio,
   legal_name, phone, street, address_extra, postal_code, city, country,
   avatar_url,
   role,
+  is_verified,
   created_at, updated_at
   FROM app_user WHERE id = $1`;
 
@@ -170,6 +171,7 @@ async function getPublicProfile(req, res, next) {
          u.display_name,
          u.bio,
          u.avatar_url,
+         u.is_verified,
          u.created_at,
          COALESCE((SELECT AVG(r.rating)::float FROM review r WHERE r.seller_id = u.id), 0) AS rating_avg,
          COALESCE((SELECT COUNT(*)::int FROM review r WHERE r.seller_id = u.id), 0) AS rating_count,
@@ -190,6 +192,7 @@ async function getPublicProfile(req, res, next) {
         display_name: row.display_name,
         bio: row.bio,
         avatar_url: row.avatar_url || "",
+        is_verified: Boolean(row.is_verified),
         created_at: row.created_at,
         rating_avg: row.rating_avg !== null ? Number(row.rating_avg) : 0,
         rating_count: row.rating_count,

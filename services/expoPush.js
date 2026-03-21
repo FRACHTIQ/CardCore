@@ -34,7 +34,7 @@ async function notifyNewActiveListing(listing, { excludeUserId } = {}) {
     return;
   }
 
-  const title = "CARDIQ · Neuer Upload";
+  const title = "VUREX · Neuer Upload";
   const body = `${listing.player_name || "Karte"} · € ${formatEur(
     listing.price_cents
   )}`;

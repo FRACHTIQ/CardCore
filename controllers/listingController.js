@@ -28,6 +28,21 @@ function assertCardType(v) {
   return t;
 }
 
+function stripListingMarketGuest(row, viewerId) {
+  if (!row || viewerId) {
+    return;
+  }
+  delete row.market_value_cents;
+  delete row.market_value_source;
+}
+
+async function recordPriceHistory(listingId, priceCents) {
+  await query(
+    `INSERT INTO listing_price_history (listing_id, price_cents) VALUES ($1, $2)`,
+    [listingId, priceCents]
+  );
+}
+
 function parseSort(sortRaw) {
   const s = sortRaw ? String(sortRaw).trim() : "";
   if (s === "price_asc") {
@@ -194,6 +209,13 @@ async function list(req, res, next) {
         l.description,
         l.image_urls,
         l.status,
+        l.is_graded,
+        l.grading_company,
+        l.grading_grade,
+        l.shipping_included,
+        l.shipping_cost_cents,
+        l.market_value_cents,
+        l.market_value_source,
         l.created_at,
         l.updated_at,
         u.display_name AS seller_display_name
@@ -233,6 +255,8 @@ async function list(req, res, next) {
         r.is_favorited = false;
       });
     }
+
+    rows.forEach((r) => stripListingMarketGuest(r, viewerId));
 
     res.json({
       listings: rows,
@@ -279,6 +303,8 @@ async function getById(req, res, next) {
       throw new HttpError(404, "Listing nicht gefunden.");
     }
 
+    stripListingMarketGuest(row, viewer);
+
     res.json({ listing: row });
   } catch (err) {
     next(err);
@@ -315,13 +341,49 @@ async function create(req, res, next) {
       throw new HttpError(400, "Ungültiger Preis (price_cents).");
     }
 
+    const isGraded = Boolean(req.body.is_graded);
+    const gradingCompany = String(req.body.grading_company || "").trim().slice(0, 32);
+    const gradingGrade = String(req.body.grading_grade || "").trim().slice(0, 32);
+    const shippingIncluded = Boolean(req.body.shipping_included);
+    let shippingCostCents = null;
+    if (
+      req.body.shipping_cost_cents !== undefined &&
+      req.body.shipping_cost_cents !== null &&
+      String(req.body.shipping_cost_cents).trim() !== ""
+    ) {
+      const sc = Number(req.body.shipping_cost_cents);
+      if (!Number.isInteger(sc) || sc < 0) {
+        throw new HttpError(400, "Ungültige Versandkosten.");
+      }
+      shippingCostCents = sc;
+    }
+    let marketValueCents = null;
+    if (
+      req.body.market_value_cents !== undefined &&
+      req.body.market_value_cents !== null &&
+      String(req.body.market_value_cents).trim() !== ""
+    ) {
+      const mv = Number(req.body.market_value_cents);
+      if (!Number.isInteger(mv) || mv < 0) {
+        throw new HttpError(400, "Ungültiger Marktwert.");
+      }
+      marketValueCents = mv;
+    }
+    const marketValueSource = String(req.body.market_value_source || "")
+      .trim()
+      .slice(0, 64);
+
     const result = await query(
       `INSERT INTO listing (
          seller_id, sport, manufacturer, set_name, year, player_name, team,
          card_number, card_type, condition_grade, price_cents, currency,
-         description, image_urls, status
+         description, image_urls, status,
+         is_graded, grading_company, grading_grade,
+         shipping_included, shipping_cost_cents,
+         market_value_cents, market_value_source
        ) VALUES (
-         $1, $2, $3, $4, $5, $6, $7, $8, $9::card_type, $10, $11, $12, $13, $14::jsonb, $15::listing_status
+         $1, $2, $3, $4, $5, $6, $7, $8, $9::card_type, $10, $11, $12, $13, $14::jsonb, $15::listing_status,
+         $16, $17, $18, $19, $20, $21, $22
        )
        RETURNING *`,
       [
@@ -340,10 +402,23 @@ async function create(req, res, next) {
         description,
         JSON.stringify(imageUrls),
         status,
+        isGraded,
+        gradingCompany,
+        gradingGrade,
+        shippingIncluded,
+        shippingCostCents,
+        marketValueCents,
+        marketValueSource,
       ]
     );
 
-    res.status(201).json({ listing: result.rows[0] });
+    const created = result.rows[0];
+    await recordPriceHistory(created.id, created.price_cents);
+    if (created.status === "ACTIVE") {
+      fireAndNotifyNewListing(created, { excludeUserId: req.userId });
+    }
+
+    res.status(201).json({ listing: created });
   } catch (err) {
     next(err);
   }
@@ -357,7 +432,7 @@ async function update(req, res, next) {
     }
 
     const existing = await query(
-      `SELECT seller_id, status AS old_status FROM listing WHERE id = $1`,
+      `SELECT seller_id, status AS old_status, price_cents AS old_price FROM listing WHERE id = $1`,
       [id]
     );
     const row = existing.rows[0];
@@ -368,6 +443,7 @@ async function update(req, res, next) {
       throw new HttpError(403, "Keine Berechtigung.");
     }
     const oldStatus = row.old_status;
+    const oldPrice = row.old_price;
 
     const updates = [];
     const params = [];
@@ -429,6 +505,55 @@ async function update(req, res, next) {
       params.push(s);
     }
 
+    if (req.body.is_graded !== undefined) {
+      updates.push(`is_graded = $${i++}`);
+      params.push(Boolean(req.body.is_graded));
+    }
+    if (req.body.grading_company !== undefined) {
+      updates.push(`grading_company = $${i++}`);
+      params.push(String(req.body.grading_company).trim().slice(0, 32));
+    }
+    if (req.body.grading_grade !== undefined) {
+      updates.push(`grading_grade = $${i++}`);
+      params.push(String(req.body.grading_grade).trim().slice(0, 32));
+    }
+    if (req.body.shipping_included !== undefined) {
+      updates.push(`shipping_included = $${i++}`);
+      params.push(Boolean(req.body.shipping_included));
+    }
+    if (req.body.shipping_cost_cents !== undefined) {
+      const raw = req.body.shipping_cost_cents;
+      if (raw === null || String(raw).trim() === "") {
+        updates.push(`shipping_cost_cents = $${i++}`);
+        params.push(null);
+      } else {
+        const sc = Number(raw);
+        if (!Number.isInteger(sc) || sc < 0) {
+          throw new HttpError(400, "Ungültige Versandkosten.");
+        }
+        updates.push(`shipping_cost_cents = $${i++}`);
+        params.push(sc);
+      }
+    }
+    if (req.body.market_value_cents !== undefined) {
+      const raw = req.body.market_value_cents;
+      if (raw === null || String(raw).trim() === "") {
+        updates.push(`market_value_cents = $${i++}`);
+        params.push(null);
+      } else {
+        const mv = Number(raw);
+        if (!Number.isInteger(mv) || mv < 0) {
+          throw new HttpError(400, "Ungültiger Marktwert.");
+        }
+        updates.push(`market_value_cents = $${i++}`);
+        params.push(mv);
+      }
+    }
+    if (req.body.market_value_source !== undefined) {
+      updates.push(`market_value_source = $${i++}`);
+      params.push(String(req.body.market_value_source).trim().slice(0, 64));
+    }
+
     if (updates.length === 0) {
       throw new HttpError(400, "Keine Felder zum Aktualisieren.");
     }
@@ -443,6 +568,9 @@ async function update(req, res, next) {
     `;
     const result = await query(sql, params);
     const updated = result.rows[0];
+    if (updated && updated.price_cents !== oldPrice) {
+      await recordPriceHistory(id, updated.price_cents);
+    }
     if (
       updated &&
       updated.status === "ACTIVE" &&
