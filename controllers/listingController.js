@@ -1,0 +1,408 @@
+const { query } = require("../db");
+const { HttpError } = require("../utils/httpError");
+
+const CARD_TYPES = new Set([
+  "BASE",
+  "NUMBERED",
+  "AUTOGRAPH",
+  "PATCH",
+  "ROOKIE",
+]);
+
+function parseImageUrls(raw) {
+  if (raw === undefined || raw === null) {
+    return [];
+  }
+  if (!Array.isArray(raw)) {
+    throw new HttpError(400, "image_urls muss ein Array sein.");
+  }
+  return raw.map((u) => String(u).trim()).filter(Boolean);
+}
+
+function assertCardType(v) {
+  const t = String(v || "").toUpperCase();
+  if (!CARD_TYPES.has(t)) {
+    throw new HttpError(400, "Ungültiger Kartentyp.");
+  }
+  return t;
+}
+
+async function list(req, res, next) {
+  try {
+    const limit = Math.min(
+      100,
+      Math.max(1, Number(req.query.limit) || 20)
+    );
+    const offset = Math.max(0, Number(req.query.offset) || 0);
+
+    const sport = req.query.sport ? String(req.query.sport).trim() : "";
+    const manufacturer = req.query.manufacturer
+      ? String(req.query.manufacturer).trim()
+      : "";
+    const setName = req.query.set_name ? String(req.query.set_name).trim() : "";
+    const team = req.query.team ? String(req.query.team).trim() : "";
+    const search = req.query.search ? String(req.query.search).trim() : "";
+    const cardType = req.query.card_type
+      ? String(req.query.card_type).toUpperCase()
+      : "";
+    const conditionGrade = req.query.condition_grade
+      ? String(req.query.condition_grade).trim()
+      : "";
+    const yearFrom = req.query.year_from !== undefined
+      ? Number(req.query.year_from)
+      : null;
+    const yearTo =
+      req.query.year_to !== undefined ? Number(req.query.year_to) : null;
+    const minPrice =
+      req.query.min_price !== undefined
+        ? Number(req.query.min_price)
+        : null;
+    const maxPrice =
+      req.query.max_price !== undefined
+        ? Number(req.query.max_price)
+        : null;
+    const sellerId =
+      req.query.seller_id !== undefined
+        ? Number(req.query.seller_id)
+        : null;
+
+    const conditions = [`l.status = 'ACTIVE'`];
+    const params = [];
+    let i = 1;
+
+    if (sport) {
+      conditions.push(`l.sport ILIKE $${i++}`);
+      params.push(`%${sport}%`);
+    }
+    if (manufacturer) {
+      conditions.push(`l.manufacturer ILIKE $${i++}`);
+      params.push(`%${manufacturer}%`);
+    }
+    if (setName) {
+      conditions.push(`l.set_name ILIKE $${i++}`);
+      params.push(`%${setName}%`);
+    }
+    if (team) {
+      conditions.push(`l.team ILIKE $${i++}`);
+      params.push(`%${team}%`);
+    }
+    if (search) {
+      conditions.push(
+        `(l.player_name ILIKE $${i} OR l.team ILIKE $${i} OR l.description ILIKE $${i})`
+      );
+      params.push(`%${search}%`);
+      i += 1;
+    }
+    if (cardType) {
+      if (!CARD_TYPES.has(cardType)) {
+        throw new HttpError(400, "Ungültiger Kartentyp.");
+      }
+      conditions.push(`l.card_type = $${i++}::card_type`);
+      params.push(cardType);
+    }
+    if (conditionGrade) {
+      conditions.push(`l.condition_grade ILIKE $${i++}`);
+      params.push(`%${conditionGrade}%`);
+    }
+    if (yearFrom !== null && !Number.isNaN(yearFrom)) {
+      conditions.push(`l.year >= $${i++}`);
+      params.push(yearFrom);
+    }
+    if (yearTo !== null && !Number.isNaN(yearTo)) {
+      conditions.push(`l.year <= $${i++}`);
+      params.push(yearTo);
+    }
+    if (minPrice !== null && !Number.isNaN(minPrice)) {
+      conditions.push(`l.price_cents >= $${i++}`);
+      params.push(Math.round(minPrice));
+    }
+    if (maxPrice !== null && !Number.isNaN(maxPrice)) {
+      conditions.push(`l.price_cents <= $${i++}`);
+      params.push(Math.round(maxPrice));
+    }
+    if (sellerId !== null && !Number.isNaN(sellerId) && sellerId >= 1) {
+      conditions.push(`l.seller_id = $${i++}`);
+      params.push(sellerId);
+    }
+
+    params.push(limit);
+    const limitIdx = i++;
+    params.push(offset);
+    const offsetIdx = i++;
+
+    const sql = `
+      SELECT
+        l.id,
+        l.seller_id,
+        l.sport,
+        l.manufacturer,
+        l.set_name,
+        l.year,
+        l.player_name,
+        l.team,
+        l.card_number,
+        l.card_type,
+        l.condition_grade,
+        l.price_cents,
+        l.currency,
+        l.description,
+        l.image_urls,
+        l.status,
+        l.created_at,
+        l.updated_at,
+        u.display_name AS seller_display_name
+      FROM listing l
+      JOIN app_user u ON u.id = l.seller_id
+      WHERE ${conditions.join(" AND ")}
+      ORDER BY l.updated_at DESC
+      LIMIT $${limitIdx} OFFSET $${offsetIdx}
+    `;
+
+    const countSql = `
+      SELECT COUNT(*)::int AS c
+      FROM listing l
+      WHERE ${conditions.join(" AND ")}
+    `;
+
+    const [listRes, countRes] = await Promise.all([
+      query(sql, params),
+      query(countSql, params.slice(0, params.length - 2)),
+    ]);
+
+    res.json({
+      listings: listRes.rows,
+      total: countRes.rows[0].c,
+      limit,
+      offset,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function getById(req, res, next) {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id < 1) {
+      throw new HttpError(400, "Ungültige ID.");
+    }
+
+    const result = await query(
+      `SELECT
+         l.*,
+         u.display_name AS seller_display_name
+       FROM listing l
+       JOIN app_user u ON u.id = l.seller_id
+       WHERE l.id = $1`,
+      [id]
+    );
+    const row = result.rows[0];
+    if (!row) {
+      throw new HttpError(404, "Listing nicht gefunden.");
+    }
+
+    const viewerId = req.userId;
+    const isOwner = viewerId !== null && viewerId === row.seller_id;
+    if (row.status !== "ACTIVE" && !isOwner) {
+      throw new HttpError(404, "Listing nicht gefunden.");
+    }
+
+    res.json({ listing: row });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function create(req, res, next) {
+  try {
+    const sport = String(req.body.sport || "").trim();
+    const manufacturer = String(req.body.manufacturer || "").trim();
+    const setName = String(req.body.set_name || "").trim();
+    const year = Number(req.body.year);
+    const playerName = String(req.body.player_name || "").trim();
+    const team = String(req.body.team || "").trim();
+    const cardNumber = String(req.body.card_number || "").trim();
+    const cardType = assertCardType(req.body.card_type);
+    const conditionGrade = String(req.body.condition_grade || "").trim();
+    const priceCents = Number(req.body.price_cents);
+    const currency = String(req.body.currency || "EUR").trim().toUpperCase() || "EUR";
+    const description = String(req.body.description || "");
+    const imageUrls = parseImageUrls(req.body.image_urls);
+    const status = req.body.status === "DRAFT" ? "DRAFT" : "ACTIVE";
+
+    if (!sport || !manufacturer || !playerName || !conditionGrade) {
+      throw new HttpError(
+        400,
+        "sport, manufacturer, player_name, condition_grade sind Pflichtfelder."
+      );
+    }
+    if (!Number.isInteger(year) || year < 1800 || year > 2100) {
+      throw new HttpError(400, "Ungültiges Jahr.");
+    }
+    if (!Number.isInteger(priceCents) || priceCents < 0) {
+      throw new HttpError(400, "Ungültiger Preis (price_cents).");
+    }
+
+    const result = await query(
+      `INSERT INTO listing (
+         seller_id, sport, manufacturer, set_name, year, player_name, team,
+         card_number, card_type, condition_grade, price_cents, currency,
+         description, image_urls, status
+       ) VALUES (
+         $1, $2, $3, $4, $5, $6, $7, $8, $9::card_type, $10, $11, $12, $13, $14::jsonb, $15::listing_status
+       )
+       RETURNING *`,
+      [
+        req.userId,
+        sport,
+        manufacturer,
+        setName,
+        year,
+        playerName,
+        team,
+        cardNumber,
+        cardType,
+        conditionGrade,
+        priceCents,
+        currency,
+        description,
+        JSON.stringify(imageUrls),
+        status,
+      ]
+    );
+
+    res.status(201).json({ listing: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function update(req, res, next) {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id < 1) {
+      throw new HttpError(400, "Ungültige ID.");
+    }
+
+    const existing = await query(
+      `SELECT seller_id FROM listing WHERE id = $1`,
+      [id]
+    );
+    const row = existing.rows[0];
+    if (!row) {
+      throw new HttpError(404, "Listing nicht gefunden.");
+    }
+    if (row.seller_id !== req.userId) {
+      throw new HttpError(403, "Keine Berechtigung.");
+    }
+
+    const updates = [];
+    const params = [];
+    let i = 1;
+
+    const map = [
+      ["sport", "sport"],
+      ["manufacturer", "manufacturer"],
+      ["set_name", "set_name"],
+      ["year", "year"],
+      ["player_name", "player_name"],
+      ["team", "team"],
+      ["card_number", "card_number"],
+      ["condition_grade", "condition_grade"],
+      ["description", "description"],
+      ["currency", "currency"],
+      ["price_cents", "price_cents"],
+    ];
+
+    for (const [key, col] of map) {
+      if (req.body[key] !== undefined) {
+        updates.push(`${col} = $${i++}`);
+        if (key === "year") {
+          const y = Number(req.body.year);
+          if (!Number.isInteger(y) || y < 1800 || y > 2100) {
+            throw new HttpError(400, "Ungültiges Jahr.");
+          }
+          params.push(y);
+        } else if (key === "price_cents") {
+          const p = Number(req.body.price_cents);
+          if (!Number.isInteger(p) || p < 0) {
+            throw new HttpError(400, "Ungültiger Preis.");
+          }
+          params.push(p);
+        } else if (key === "currency") {
+          params.push(String(req.body.currency).trim().toUpperCase() || "EUR");
+        } else {
+          params.push(String(req.body[key]));
+        }
+      }
+    }
+
+    if (req.body.card_type !== undefined) {
+      updates.push(`card_type = $${i++}::card_type`);
+      params.push(assertCardType(req.body.card_type));
+    }
+
+    if (req.body.image_urls !== undefined) {
+      updates.push(`image_urls = $${i++}::jsonb`);
+      params.push(JSON.stringify(parseImageUrls(req.body.image_urls)));
+    }
+
+    if (req.body.status !== undefined) {
+      const s = String(req.body.status).toUpperCase();
+      if (!["DRAFT", "ACTIVE", "SOLD", "ARCHIVED"].includes(s)) {
+        throw new HttpError(400, "Ungültiger Status.");
+      }
+      updates.push(`status = $${i++}::listing_status`);
+      params.push(s);
+    }
+
+    if (updates.length === 0) {
+      throw new HttpError(400, "Keine Felder zum Aktualisieren.");
+    }
+
+    updates.push(`updated_at = NOW()`);
+    params.push(id);
+
+    const sql = `
+      UPDATE listing SET ${updates.join(", ")}
+      WHERE id = $${i}
+      RETURNING *
+    `;
+    const result = await query(sql, params);
+    res.json({ listing: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function archive(req, res, next) {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id < 1) {
+      throw new HttpError(400, "Ungültige ID.");
+    }
+
+    const result = await query(
+      `UPDATE listing
+       SET status = 'ARCHIVED', updated_at = NOW()
+       WHERE id = $1 AND seller_id = $2
+       RETURNING *`,
+      [id, req.userId]
+    );
+    if (result.rowCount === 0) {
+      throw new HttpError(404, "Listing nicht gefunden oder keine Berechtigung.");
+    }
+    res.json({ listing: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = {
+  list,
+  getById,
+  create,
+  update,
+  archive,
+  CARD_TYPES,
+};
