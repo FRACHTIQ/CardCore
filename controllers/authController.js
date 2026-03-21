@@ -16,9 +16,16 @@ async function register(req, res, next) {
     const email = String(req.body.email || "").trim().toLowerCase();
     const password = String(req.body.password || "");
     const displayName = String(req.body.display_name || "").trim();
+    const acceptTerms =
+      req.body.accept_terms === true ||
+      req.body.accept_terms === "true" ||
+      req.body.accept_terms === 1;
 
     if (!email || !password) {
       throw new HttpError(400, "E-Mail und Passwort erforderlich.");
+    }
+    if (!acceptTerms) {
+      throw new HttpError(400, "Die AGB müssen akzeptiert werden.");
     }
     if (password.length < 8) {
       throw new HttpError(400, "Passwort mindestens 8 Zeichen.");
@@ -29,14 +36,22 @@ async function register(req, res, next) {
 
     const hash = await bcrypt.hash(password, 10);
     const result = await query(
-      `INSERT INTO app_user (email, password_hash, display_name)
-       VALUES ($1, $2, $3)
-       RETURNING id, email, display_name, created_at`,
+      `INSERT INTO app_user (email, password_hash, display_name, terms_accepted_at)
+       VALUES ($1, $2, $3, NOW())
+       RETURNING id, email, display_name, role, created_at`,
       [email, hash, displayName]
     );
     const user = result.rows[0];
     const token = signToken(user.id);
-    res.status(201).json({ user: { id: user.id, email: user.email, display_name: user.display_name }, token });
+    res.status(201).json({
+      user: {
+        id: user.id,
+        email: user.email,
+        display_name: user.display_name,
+        role: user.role || "user",
+      },
+      token,
+    });
   } catch (err) {
     if (err.code === "23505") {
       next(new HttpError(409, "E-Mail ist bereits registriert."));
@@ -56,12 +71,16 @@ async function login(req, res, next) {
     }
 
     const result = await query(
-      `SELECT id, email, password_hash, display_name FROM app_user WHERE email = $1`,
+      `SELECT id, email, password_hash, display_name, role, suspended_at
+       FROM app_user WHERE email = $1`,
       [email]
     );
     const user = result.rows[0];
     if (!user) {
       throw new HttpError(401, "Ungültige Zugangsdaten.");
+    }
+    if (user.suspended_at) {
+      throw new HttpError(403, "Konto gesperrt.");
     }
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) {
@@ -69,7 +88,12 @@ async function login(req, res, next) {
     }
     const token = signToken(user.id);
     res.json({
-      user: { id: user.id, email: user.email, display_name: user.display_name },
+      user: {
+        id: user.id,
+        email: user.email,
+        display_name: user.display_name,
+        role: user.role || "user",
+      },
       token,
     });
   } catch (err) {

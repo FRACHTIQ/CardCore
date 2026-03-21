@@ -28,6 +28,12 @@ CREATE TABLE app_user (
   postal_code     TEXT NOT NULL DEFAULT '',
   city            TEXT NOT NULL DEFAULT '',
   country         TEXT NOT NULL DEFAULT 'DE',
+  terms_accepted_at TIMESTAMPTZ,
+  avatar_url      TEXT NOT NULL DEFAULT '',
+  role            TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
+  is_verified     BOOLEAN NOT NULL DEFAULT FALSE,
+  verification_note TEXT NOT NULL DEFAULT '',
+  suspended_at    TIMESTAMPTZ,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

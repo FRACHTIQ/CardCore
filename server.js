@@ -1,4 +1,5 @@
 require("dotenv").config();
+const path = require("path");
 const express = require("express");
 const cors = require("cors");
 
@@ -11,6 +12,8 @@ const favoritesRoutes = require("./routes/favorites");
 const conversationsRoutes = require("./routes/conversations");
 const reviewsRoutes = require("./routes/reviews");
 const aiRoutes = require("./routes/ai");
+const supportRoutes = require("./routes/support");
+const adminRoutes = require("./routes/admin");
 
 const app = express();
 const port = Number(process.env.PORT) || 3000;
@@ -34,6 +37,9 @@ app.use("/api/favorites", favoritesRoutes);
 app.use("/api/conversations", conversationsRoutes);
 app.use("/api/reviews", reviewsRoutes);
 app.use("/api/ai", aiRoutes);
+app.use("/api/support", supportRoutes);
+app.use("/api/admin", adminRoutes);
+app.use("/admin", express.static(path.join(__dirname, "admin")));
 
 app.use((req, res) => {
   res.status(404).json({ error: "Nicht gefunden." });

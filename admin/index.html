@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CardCore Admin</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a2332;
+      --text: #e7ecf3;
+      --muted: #8b9cb3;
+      --accent: #3b82f6;
+      --danger: #ef4444;
+      --ok: #22c55e;
+      --border: #2d3a4d;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, Segoe UI, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    header {
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    h1 { margin: 0; font-size: 1.15rem; font-weight: 600; }
+    .muted { color: var(--muted); font-size: 0.85rem; }
+    main { padding: 1rem 1.25rem 2rem; max-width: 1200px; margin: 0 auto; }
+    .login-box {
+      max-width: 360px;
+      margin: 3rem auto;
+      padding: 1.5rem;
+      background: var(--panel);
+      border-radius: 10px;
+      border: 1px solid var(--border);
+    }
+    label { display: block; margin-top: 0.75rem; font-size: 0.85rem; color: var(--muted); }
+    input, textarea, select, button {
+      width: 100%;
+      margin-top: 0.35rem;
+      padding: 0.5rem 0.65rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font: inherit;
+    }
+    button {
+      cursor: pointer;
+      background: var(--accent);
+      border: none;
+      font-weight: 600;
+      margin-top: 1rem;
+    }
+    button.secondary { background: var(--panel); border: 1px solid var(--border); }
+    button.danger { background: var(--danger); }
+    .error { color: var(--danger); font-size: 0.9rem; margin-top: 0.5rem; }
+    nav.tabs {
+      display: flex;
+      gap: 0.35rem;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+    }
+    nav.tabs button {
+      width: auto;
+      margin: 0;
+      padding: 0.45rem 0.85rem;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      font-weight: 500;
+    }
+    nav.tabs button.active {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+    .grid-kpi {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 0.75rem;
+      margin-bottom: 1.25rem;
+    }
+    .kpi {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.85rem;
+    }
+    .kpi strong { display: block; font-size: 1.35rem; }
+    .kpi span { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: 500; }
+    tr:hover td { background: rgba(59, 130, 246, 0.06); }
+    .row-actions { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+    .row-actions button { width: auto; margin: 0; padding: 0.25rem 0.5rem; font-size: 0.8rem; }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+    pre { white-space: pre-wrap; word-break: break-word; font-size: 0.8rem; color: var(--muted); }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div id="view-login" class="login-box">
+    <h1>CardCore Admin</h1>
+    <p class="muted">Anmeldung mit Admin-Konto (JWT).</p>
+    <label>E-Mail<input type="email" id="login-email" autocomplete="username" /></label>
+    <label>Passwort<input type="password" id="login-password" autocomplete="current-password" /></label>
+    <button type="button" id="btn-login">Anmelden</button>
+    <p id="login-error" class="error hidden"></p>
+  </div>
+
+  <div id="view-app" class="hidden">
+    <header>
+      <h1>CardCore Admin</h1>
+      <div class="row-actions">
+        <span class="muted" id="who"></span>
+        <button type="button" class="secondary" id="btn-logout">Abmelden</button>
+      </div>
+    </header>
+    <main>
+      <nav class="tabs" id="tabs"></nav>
+      <section id="tab-dashboard"></section>
+      <section id="tab-users" class="hidden"></section>
+      <section id="tab-listings" class="hidden"></section>
+      <section id="tab-revenue" class="hidden"></section>
+      <section id="tab-support" class="hidden"></section>
+    </main>
+  </div>
+
+  <script>
+    const API = "";
+    const LS = "cardcore_admin_token";
+
+    function token() { return localStorage.getItem(LS); }
+    function setToken(t) { if (t) localStorage.setItem(LS, t); else localStorage.removeItem(LS); }
+
+    async function api(path, opts = {}) {
+      const headers = { ...opts.headers, "Content-Type": "application/json" };
+      const tok = token();
+      if (tok) headers.Authorization = "Bearer " + tok;
+      const r = await fetch(API + "/api/admin" + path, { ...opts, headers });
+      const text = await r.text();
+      let data;
+      try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
+      if (!r.ok) throw new Error(data.error || r.statusText || "Fehler");
+      return data;
+    }
+
+    function showLogin() {
+      document.getElementById("view-login").classList.remove("hidden");
+      document.getElementById("view-app").classList.add("hidden");
+    }
+    function showApp() {
+      document.getElementById("view-login").classList.add("hidden");
+      document.getElementById("view-app").classList.remove("hidden");
+    }
+
+    const tabs = [
+      { id: "dashboard", label: "Dashboard" },
+      { id: "users", label: "Nutzer" },
+      { id: "listings", label: "Karten" },
+      { id: "revenue", label: "Umsatz" },
+      { id: "support", label: "Support" },
+    ];
+    let activeTab = "dashboard";
+
+    function renderTabs() {
+      const el = document.getElementById("tabs");
+      el.innerHTML = tabs.map(t =>
+        `<button type="button" class="${t.id === activeTab ? "active" : ""}" data-tab="${t.id}">${t.label}</button>`
+      ).join("");
+      el.querySelectorAll("button").forEach(b => {
+        b.onclick = () => { activeTab = b.dataset.tab; renderTabs(); showTab(); };
+      });
+    }
+
+    function showTab() {
+      ["dashboard", "users", "listings", "revenue", "support"].forEach(id => {
+        const sec = document.getElementById("tab-" + id);
+        if (sec) sec.classList.toggle("hidden", id !== activeTab);
+      });
+      if (activeTab === "dashboard") loadDashboard();
+      if (activeTab === "users") loadUsers();
+      if (activeTab === "listings") loadListings();
+      if (activeTab === "revenue") loadRevenue();
+      if (activeTab === "support") loadSupport();
+    }
+
+    function fmtCents(c) {
+      return (Number(c) / 100).toLocaleString("de-DE", { style: "currency", currency: "EUR" });
+    }
+
+    async function loadDashboard() {
+      const el = document.getElementById("tab-dashboard");
+      el.innerHTML = "<p class=\"muted\">Lade…</p>";
+      try {
+        const d = await api("/dashboard");
+        el.innerHTML = `
+          <div class="grid-kpi">
+            <div class="kpi"><span>Nutzer</span><strong>${d.users_total}</strong></div>
+            <div class="kpi"><span>Verifiziert</span><strong>${d.users_verified}</strong></div>
+            <div class="kpi"><span>Aktive Listings</span><strong>${d.listings_active}</strong></div>
+            <div class="kpi"><span>Verkauft</span><strong>${d.listings_sold}</strong></div>
+            <div class="kpi"><span>Lagerwert (aktiv)</span><strong>${fmtCents(d.inventory_value_active_cents)}</strong></div>
+            <div class="kpi"><span>Umsatz (SOLD)</span><strong>${fmtCents(d.revenue_sold_cents)}</strong></div>
+            <div class="kpi"><span>Support offen</span><strong>${d.support_open}</strong></div>
+            <div class="kpi"><span>Tickets gesamt</span><strong>${d.support_tickets_total}</strong></div>
+          </div>`;
+      } catch (e) {
+        el.innerHTML = "<p class=\"error\">" + e.message + "</p>";
+      }
+    }
+
+    async function loadUsers() {
+      const el = document.getElementById("tab-users");
+      el.innerHTML = `
+        <div class="panel row-actions">
+          <input type="search" id="user-search" placeholder="Suche E-Mail / Name" style="flex:1;min-width:160px;margin:0" />
+          <button type="button" id="user-refresh">Aktualisieren</button>
+        </div>
+        <div class="panel" id="user-table-wrap">Lade…</div>`;
+      const run = async () => {
+        const q = document.getElementById("user-search").value.trim();
+        const path = "/users?limit=50" + (q ? "&search=" + encodeURIComponent(q) : "");
+        try {
+          const data = await api(path);
+          const rows = data.users.map(u => `<tr>
+            <td>${u.id}</td>
+            <td>${escapeHtml(u.email)}</td>
+            <td>${escapeHtml(u.display_name || "")}</td>
+            <td>${u.role}</td>
+            <td>${u.is_verified ? "ja" : "nein"}</td>
+            <td>${u.suspended_at ? "gesperrt" : "—"}</td>
+            <td><button type="button" class="secondary user-detail" data-id="${u.id}">Details</button></td>
+          </tr>`).join("");
+          document.getElementById("user-table-wrap").innerHTML = `
+            <p class="muted">${data.total} Treffer</p>
+            <table><thead><tr><th>ID</th><th>E-Mail</th><th>Name</th><th>Rolle</th><th>Verif.</th><th>Status</th><th></th></tr></thead>
+            <tbody>${rows || "<tr><td colspan=\"7\">Keine Daten</td></tr>"}</tbody></table>`;
+          document.querySelectorAll(".user-detail").forEach(b => {
+            b.onclick = () => openUserDetail(Number(b.dataset.id));
+          });
+        } catch (e) {
+          document.getElementById("user-table-wrap").innerHTML = "<p class=\"error\">" + e.message + "</p>";
+        }
+      };
+      document.getElementById("user-refresh").onclick = run;
+      document.getElementById("user-search").onchange = run;
+      await run();
+    }
+
+    function escapeHtml(s) {
+      const d = document.createElement("div");
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    async function openUserDetail(id) {
+      const el = document.getElementById("tab-users");
+      el.innerHTML = "<p>Lade…</p>";
+      try {
+        const { user, stats } = await api("/users/" + id);
+        el.innerHTML = `
+          <div class="panel row-actions">
+            <button type="button" class="secondary" id="user-back">← Liste</button>
+          </div>
+          <div class="panel">
+            <pre>${escapeHtml(JSON.stringify(user, null, 2))}</pre>
+            <p class="muted">Listings: aktiv ${stats.active_listings}, verkauft ${stats.sold_listings}, gesamt ${stats.total_listings}</p>
+            <label>Verifiziert
+              <select id="uf-verified"><option value="true">ja</option><option value="false">nein</option></select>
+            </label>
+            <label>Notiz (Verifizierung)<textarea id="uf-note" rows="2"></textarea></label>
+            <label>Rolle
+              <select id="uf-role"><option value="user">user</option><option value="admin">admin</option></select>
+            </label>
+            <label><input type="checkbox" id="uf-suspended" /> Konto sperren</label>
+            <button type="button" id="uf-save">Speichern</button>
+            <p id="uf-msg" class="muted"></p>
+          </div>`;
+        document.getElementById("uf-verified").value = user.is_verified ? "true" : "false";
+        document.getElementById("uf-note").value = user.verification_note || "";
+        document.getElementById("uf-role").value = user.role || "user";
+        document.getElementById("uf-suspended").checked = !!user.suspended_at;
+        document.getElementById("user-back").onclick = () => { loadUsers(); };
+        document.getElementById("uf-save").onclick = async () => {
+          const msg = document.getElementById("uf-msg");
+          msg.textContent = "";
+          try {
+            await api("/users/" + id, {
+              method: "PATCH",
+              body: JSON.stringify({
+                is_verified: document.getElementById("uf-verified").value === "true",
+                verification_note: document.getElementById("uf-note").value,
+                role: document.getElementById("uf-role").value,
+                suspended: document.getElementById("uf-suspended").checked,
+              }),
+            });
+            msg.textContent = "Gespeichert.";
+            openUserDetail(id);
+          } catch (e) {
+            msg.textContent = e.message;
+            msg.className = "error";
+          }
+        };
+      } catch (e) {
+        el.innerHTML = "<p class=\"error\">" + e.message + '</p><button type="button" class="secondary" id="ub">Zurück</button>';
+        document.getElementById("ub").onclick = () => loadUsers();
+      }
+    }
+
+    async function loadListings() {
+      const el = document.getElementById("tab-listings");
+      el.innerHTML = `
+        <div class="panel row-actions">
+          <input type="search" id="list-search" placeholder="Spieler / Hersteller / E-Mail" style="flex:1;min-width:160px;margin:0" />
+          <select id="list-status" style="width:auto;margin:0">
+            <option value="">Alle Status</option>
+            <option>ACTIVE</option><option>SOLD</option><option>DRAFT</option><option>ARCHIVED</option>
+          </select>
+          <button type="button" id="list-refresh">Aktualisieren</button>
+        </div>
+        <div class="panel" id="list-table-wrap">Lade…</div>`;
+      const run = async () => {
+        const q = document.getElementById("list-search").value.trim();
+        const st = document.getElementById("list-status").value;
+        let path = "/listings?limit=50";
+        if (q) path += "&search=" + encodeURIComponent(q);
+        if (st) path += "&status=" + encodeURIComponent(st);
+        try {
+          const data = await api(path);
+          const rows = data.listings.map(l => `<tr>
+            <td>${l.id}</td>
+            <td>${escapeHtml(l.player_name)}</td>
+            <td>${l.status}</td>
+            <td>${fmtCents(l.price_cents)}</td>
+            <td>${escapeHtml(l.seller_email || "")}</td>
+            <td><button type="button" class="secondary list-detail" data-id="${l.id}">Details</button></td>
+          </tr>`).join("");
+          document.getElementById("list-table-wrap").innerHTML = `
+            <p class="muted">${data.total} Treffer</p>
+            <table><thead><tr><th>ID</th><th>Spieler</th><th>Status</th><th>Preis</th><th>Verkäufer</th><th></th></tr></thead>
+            <tbody>${rows || "<tr><td colspan=\"6\">Keine Daten</td></tr>"}</tbody></table>`;
+          document.querySelectorAll(".list-detail").forEach(b => {
+            b.onclick = () => openListingDetail(Number(b.dataset.id));
+          });
+        } catch (e) {
+          document.getElementById("list-table-wrap").innerHTML = "<p class=\"error\">" + e.message + "</p>";
+        }
+      };
+      document.getElementById("list-refresh").onclick = run;
+      document.getElementById("list-search").onchange = run;
+      document.getElementById("list-status").onchange = run;
+      await run();
+    }
+
+    async function openListingDetail(id) {
+      const el = document.getElementById("tab-listings");
+      el.innerHTML = "<p>Lade…</p>";
+      try {
+        const { listing } = await api("/listings/" + id);
+        el.innerHTML = `
+          <div class="panel row-actions">
+            <button type="button" class="secondary" id="ld-back">← Liste</button>
+          </div>
+          <div class="panel">
+            <pre>${escapeHtml(JSON.stringify(listing, null, 2))}</pre>
+            <label>Status ändern
+              <select id="ld-status">
+                <option>DRAFT</option><option>ACTIVE</option><option>SOLD</option><option>ARCHIVED</option>
+              </select>
+            </label>
+            <button type="button" id="ld-save">Speichern</button>
+            <p id="ld-msg" class="muted"></p>
+          </div>`;
+        document.getElementById("ld-status").value = listing.status;
+        document.getElementById("ld-back").onclick = () => loadListings();
+        document.getElementById("ld-save").onclick = async () => {
+          const msg = document.getElementById("ld-msg");
+          msg.textContent = "";
+          try {
+            await api("/listings/" + id, {
+              method: "PATCH",
+              body: JSON.stringify({ status: document.getElementById("ld-status").value }),
+            });
+            msg.textContent = "Gespeichert.";
+          } catch (e) {
+            msg.textContent = e.message;
+            msg.className = "error";
+          }
+        };
+      } catch (e) {
+        el.innerHTML = "<p class=\"error\">" + e.message + '</p><button type="button" class="secondary" id="lb">Zurück</button>';
+        document.getElementById("lb").onclick = () => loadListings();
+      }
+    }
+
+    async function loadRevenue() {
+      const el = document.getElementById("tab-revenue");
+      el.innerHTML = "<p class=\"muted\">Lade…</p>";
+      try {
+        const data = await api("/revenue");
+        const rows = data.by_status.map(r => `<tr>
+          <td>${r.status}</td>
+          <td>${r.c}</td>
+          <td>${fmtCents(r.total_cents)}</td>
+        </tr>`).join("");
+        el.innerHTML = `<div class="panel"><table><thead><tr><th>Status</th><th>Anzahl</th><th>Summe Preis (cent)</th></tr></thead>
+          <tbody>${rows}</tbody></table></div>`;
+      } catch (e) {
+        el.innerHTML = "<p class=\"error\">" + e.message + "</p>";
+      }
+    }
+
+    let supportTicketId = null;
+
+    async function loadSupport() {
+      supportTicketId = null;
+      const el = document.getElementById("tab-support");
+      el.innerHTML = `<div class="panel" id="sup-list-wrap">Lade…</div>`;
+      try {
+        const data = await api("/support/tickets?limit=80");
+        const rows = data.tickets.map(t => `<tr>
+          <td>${t.id}</td>
+          <td>${escapeHtml(t.subject)}</td>
+          <td>${t.status}</td>
+          <td>${escapeHtml(t.user_email || "")}</td>
+          <td><button type="button" class="secondary sup-open" data-id="${t.id}">Öffnen</button></td>
+        </tr>`).join("");
+        document.getElementById("sup-list-wrap").innerHTML = `
+          <p class="muted">${data.total} Tickets</p>
+          <table><thead><tr><th>ID</th><th>Betreff</th><th>Status</th><th>Nutzer</th><th></th></tr></thead>
+          <tbody>${rows || "<tr><td colspan=\"5\">Keine</td></tr>"}</tbody></table>`;
+        document.querySelectorAll(".sup-open").forEach(b => {
+          b.onclick = () => openSupportTicket(Number(b.dataset.id));
+        });
+      } catch (e) {
+        document.getElementById("sup-list-wrap").innerHTML = "<p class=\"error\">" + e.message + "</p>";
+      }
+    }
+
+    async function openSupportTicket(id) {
+      supportTicketId = id;
+      const el = document.getElementById("tab-support");
+      el.innerHTML = "<p>Lade…</p>";
+      try {
+        const data = await api("/support/tickets/" + id);
+        const msgs = data.messages.map(m =>
+          `<div class="panel"><strong>${m.from_user ? "Nutzer" : "Team"}</strong> · ${m.created_at}<pre>${escapeHtml(m.body)}</pre></div>`
+        ).join("");
+        el.innerHTML = `
+          <div class="panel row-actions">
+            <button type="button" class="secondary" id="sup-back">← Liste</button>
+            <select id="sup-st" style="width:auto;margin:0">
+              <option>OPEN</option><option>WAITING_STAFF</option><option>ANSWERED</option><option>CLOSED</option>
+            </select>
+            <button type="button" id="sup-save-st">Status setzen</button>
+          </div>
+          <div class="panel"><strong>Ticket #${data.ticket.id}</strong> · ${escapeHtml(data.ticket.subject)}</div>
+          ${msgs}
+          <div class="panel">
+            <label>Antwort (Staff)<textarea id="sup-reply" rows="4"></textarea></label>
+            <button type="button" id="sup-send">Senden</button>
+            <p id="sup-msg" class="muted"></p>
+          </div>`;
+        document.getElementById("sup-st").value = data.ticket.status;
+        document.getElementById("sup-back").onclick = () => loadSupport();
+        document.getElementById("sup-save-st").onclick = async () => {
+          const msg = document.getElementById("sup-msg");
+          try {
+            await api("/support/tickets/" + id, {
+              method: "PATCH",
+              body: JSON.stringify({ status: document.getElementById("sup-st").value }),
+            });
+            msg.textContent = "Status gespeichert.";
+          } catch (e) {
+            msg.textContent = e.message;
+            msg.className = "error";
+          }
+        };
+        document.getElementById("sup-send").onclick = async () => {
+          const body = document.getElementById("sup-reply").value;
+          const msg = document.getElementById("sup-msg");
+          try {
+            await api("/support/tickets/" + id + "/messages", {
+              method: "POST",
+              body: JSON.stringify({ body }),
+            });
+            msg.textContent = "Gesendet.";
+            openSupportTicket(id);
+          } catch (e) {
+            msg.textContent = e.message;
+            msg.className = "error";
+          }
+        };
+      } catch (e) {
+        el.innerHTML = "<p class=\"error\">" + e.message + '</p><button type="button" class="secondary" id="sb">Zurück</button>';
+        document.getElementById("sb").onclick = () => loadSupport();
+      }
+    }
+
+    document.getElementById("btn-login").onclick = async () => {
+      const err = document.getElementById("login-error");
+      err.classList.add("hidden");
+      const email = document.getElementById("login-email").value.trim();
+      const password = document.getElementById("login-password").value;
+      try {
+        const r = await fetch(API + "/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || "Login fehlgeschlagen");
+        if (data.user.role !== "admin") {
+          setToken(null);
+          throw new Error("Kein Admin-Konto.");
+        }
+        setToken(data.token);
+        showApp();
+        document.getElementById("who").textContent = data.user.email;
+        renderTabs();
+        showTab();
+      } catch (e) {
+        err.textContent = e.message;
+        err.classList.remove("hidden");
+      }
+    };
+
+    document.getElementById("btn-logout").onclick = () => {
+      setToken(null);
+      showLogin();
+    };
+
+    if (token()) {
+      showApp();
+      document.getElementById("who").textContent = "(Session)";
+      renderTabs();
+      showTab();
+    } else {
+      showLogin();
+    }
+  </script>
+</body>
+</html>
