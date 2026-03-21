@@ -30,6 +30,7 @@ function normCountry(raw) {
 const ME_SELECT = `SELECT id, email, display_name, bio,
   legal_name, phone, street, address_extra, postal_code, city, country,
   avatar_url,
+  role,
   created_at, updated_at
   FROM app_user WHERE id = $1`;
 
