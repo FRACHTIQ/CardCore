@@ -138,6 +138,7 @@
       <section id="tab-listings" class="hidden"></section>
       <section id="tab-revenue" class="hidden"></section>
       <section id="tab-support" class="hidden"></section>
+      <section id="tab-app" class="hidden"></section>
     </main>
   </div>
 
@@ -175,6 +176,7 @@
       { id: "listings", label: "Karten" },
       { id: "revenue", label: "Umsatz" },
       { id: "support", label: "Support" },
+      { id: "app", label: "App & Wartung" },
     ];
     let activeTab = "dashboard";
 
@@ -189,7 +191,7 @@
     }
 
     function showTab() {
-      ["dashboard", "users", "listings", "revenue", "support"].forEach(id => {
+      ["dashboard", "users", "listings", "revenue", "support", "app"].forEach(id => {
         const sec = document.getElementById("tab-" + id);
         if (sec) sec.classList.toggle("hidden", id !== activeTab);
       });
@@ -198,10 +200,63 @@
       if (activeTab === "listings") loadListings();
       if (activeTab === "revenue") loadRevenue();
       if (activeTab === "support") loadSupport();
+      if (activeTab === "app") loadAppSettings();
     }
 
     function fmtCents(c) {
       return (Number(c) / 100).toLocaleString("de-DE", { style: "currency", currency: "EUR" });
+    }
+
+    function escapeHtml(s) {
+      return String(s ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    async function loadAppSettings() {
+      const el = document.getElementById("tab-app");
+      el.innerHTML = "<p class=\"muted\">Lade…</p>";
+      try {
+        const data = await api("/app-settings");
+        const s = data.settings;
+        const mv = escapeHtml(s.min_native_version);
+        const mm = escapeHtml(s.maintenance_message);
+        el.innerHTML = `
+          <div class="panel">
+            <h2 style="margin:0 0 0.5rem; font-size:1rem;">App &amp; Wartung</h2>
+            <p class="muted" style="margin:0 0 0.75rem; font-size:0.85rem;">Mindest-Version (native App, Semver). Liegt die installierte Version darunter, zeigt die App einen Update-Zwang.</p>
+            <label>min_native_version<input type="text" id="min-ver" value="${mv}" /></label>
+            <label style="margin-top:1rem; display:flex; align-items:center; gap:0.5rem; cursor:pointer;">
+              <input type="checkbox" id="maint-enabled" ${s.maintenance_enabled ? "checked" : ""} />
+              Wartungsmodus aktiv
+            </label>
+            <label>Wartungstext (in der App)<textarea id="maint-msg" rows="6">${mm}</textarea></label>
+            <button type="button" id="btn-save-app">Speichern</button>
+            <p id="app-save-msg" class="muted"></p>
+          </div>`;
+        document.getElementById("btn-save-app").onclick = async () => {
+          const msg = document.getElementById("app-save-msg");
+          msg.textContent = "";
+          msg.style.color = "";
+          try {
+            await api("/app-settings", {
+              method: "PATCH",
+              body: JSON.stringify({
+                min_native_version: document.getElementById("min-ver").value.trim(),
+                maintenance_enabled: document.getElementById("maint-enabled").checked,
+                maintenance_message: document.getElementById("maint-msg").value,
+              }),
+            });
+            msg.textContent = "Gespeichert.";
+          } catch (e) {
+            msg.textContent = e.message;
+            msg.style.color = "var(--danger)";
+          }
+        };
+      } catch (e) {
+        el.innerHTML = "<p class=\"error\">" + escapeHtml(e.message) + "</p>";
+      }
     }
 
     async function loadDashboard() {

@@ -2,10 +2,14 @@ const express = require("express");
 const { authRequired } = require("../middleware/auth");
 const { adminRequired } = require("../middleware/admin");
 const admin = require("../controllers/adminController");
+const appConfig = require("../controllers/appConfigController");
 
 const router = express.Router();
 
 router.use(authRequired, adminRequired);
+
+router.get("/app-settings", appConfig.getAppSettingsAdmin);
+router.patch("/app-settings", appConfig.patchAppSettingsAdmin);
 
 router.get("/dashboard", admin.dashboard);
 router.get("/revenue", admin.revenueDetail);

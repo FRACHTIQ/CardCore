@@ -4,6 +4,7 @@ const express = require("express");
 const cors = require("cors");
 
 const { errorHandler } = require("./middleware/errorHandler");
+const appConfigController = require("./controllers/appConfigController");
 
 const authRoutes = require("./routes/auth");
 const usersRoutes = require("./routes/users");
@@ -29,6 +30,8 @@ app.use(express.json({ limit: "15mb" }));
 app.get("/health", (req, res) => {
   res.json({ ok: true, service: "cardcore-backend" });
 });
+
+app.get("/api/app/status", appConfigController.publicStatus);
 
 app.use("/api/auth", authRoutes);
 app.use("/api/users", usersRoutes);

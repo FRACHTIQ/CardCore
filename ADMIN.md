@@ -2,7 +2,7 @@
 
 ## Datenbank
 
-Nach `001_initial.sql` (enthält bereits Admin-Spalten) oder bei bestehender DB: **`sql/005_admin.sql`** in PostgreSQL ausführen.
+Nach `001_initial.sql` (enthält bereits Admin-Spalten) oder bei bestehender DB: **`sql/005_admin.sql`**, **`sql/006_app_config.sql`** in PostgreSQL ausführen (Reihenfolge siehe `sql/README.md`).
 
 ## Admin-Nutzer anlegen (empfohlen)
 
@@ -46,8 +46,19 @@ UPDATE app_user SET role = 'admin' WHERE email = 'deine@email.de';
 | GET | `/support/tickets/:id` | Ticket + Nachrichten |
 | POST | `/support/tickets/:id/messages` | Staff-Antwort (`body`) |
 | PATCH | `/support/tickets/:id` | `status` |
+| GET | `/app-settings` | Mindest-Version, Wartung (lesen) |
+| PATCH | `/app-settings` | `min_native_version`, `maintenance_enabled`, `maintenance_message` |
+
+Öffentlich (ohne Login): **`GET /api/app/status`** – liefert `min_native_version` und `maintenance` für die Mobile-App (Startprüfung).
 
 Header: `Authorization: Bearer <token>`.
+
+## App-Version & Wartung (Web-Tab „App & Wartung“)
+
+- **`min_native_version`:** Semver (z. B. `1.0.0`). Liegt die installierte App-Version **darunter**, zeigt die App einen **Update-Zwang** (kein normaler Login bis zum Update).
+- **Wartungsmodus:** Text aus dem Dashboard erscheint in der App als **Vollbild**; Nutzer können die App nicht nutzen, bis der Modus deaktiviert wird.
+
+**Push-Benachrichtigung** bei neuer Version ist nicht automatisch dabei – Nutzer sehen den Hinweis beim **nächsten App-Start** (oder nach erneutem Öffnen).
 
 ## Fehler „Serverfehler“ / 500 unter `/api/admin/users`
 

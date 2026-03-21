@@ -7,5 +7,6 @@ Reihenfolge in PostgreSQL (z. B. Railway):
 3. `003_support.sql` – `terms_accepted_at` auf `app_user`, Support-Tickets (`support_ticket`, `support_message`)
 4. `004_avatar.sql` – `avatar_url` auf `app_user` (Profilbild als Data-URL)
 5. `005_admin.sql` – `role` (`user`/`admin`), `is_verified`, `verification_note`, `suspended_at` auf `app_user`
+6. `006_app_config.sql` – `app_config` (Mindest-App-Version, Wartungsmodus & -text für die native App)
 
 **Hinweis:** `002` ist nur nötig, wenn die Datenbank bereits mit `001` ohne die neuen Spalten angelegt wurde. Bei einem **frischen** Setup aus `001_initial.sql` (inkl. `legal_name`, …) kann `002` übersprungen werden.
