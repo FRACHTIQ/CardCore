@@ -34,7 +34,13 @@ async function listMine(req, res, next) {
          l.currency AS listing_currency,
          l.status AS listing_status,
          CASE WHEN c.buyer_id = $1 THEN c.seller_id ELSE c.buyer_id END AS other_user_id,
-         ou.display_name AS other_display_name
+         ou.display_name AS other_display_name,
+         (SELECT m.sender_id FROM message m
+            WHERE m.conversation_id = c.id
+            ORDER BY m.created_at DESC LIMIT 1) AS last_message_sender_id,
+         (SELECT LEFT(m.body, 140) FROM message m
+            WHERE m.conversation_id = c.id
+            ORDER BY m.created_at DESC LIMIT 1) AS last_message_preview
        FROM conversation c
        JOIN listing l ON l.id = c.listing_id
        JOIN app_user ou ON ou.id = (
