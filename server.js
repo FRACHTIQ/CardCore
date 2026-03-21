@@ -31,7 +31,11 @@ app.use(
 app.use(express.json({ limit: "15mb" }));
 
 app.get("/health", (req, res) => {
-  res.json({ ok: true, service: "cardcore-backend" });
+  res.json({
+    ok: true,
+    service: "vurex-backend",
+    time: new Date().toISOString(),
+  });
 });
 
 app.get("/api/app/status", appConfigController.publicStatus);
@@ -58,5 +62,5 @@ app.use((req, res) => {
 app.use(errorHandler);
 
 app.listen(port, () => {
-  console.log(`CardCore API auf Port ${port}`);
+  console.log(`VUREX API auf Port ${port}`);
 });

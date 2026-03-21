@@ -10,6 +10,7 @@ router.use(verifiedRequired);
 
 router.get("/", offerController.listMine);
 router.post("/", offerController.create);
+router.post("/:id/withdraw", offerController.withdraw);
 router.post("/:id/accept", offerController.accept);
 router.post("/:id/reject", offerController.reject);
 
