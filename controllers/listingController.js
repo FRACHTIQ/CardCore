@@ -27,6 +27,23 @@ function assertCardType(v) {
   return t;
 }
 
+function parseSort(sortRaw) {
+  const s = sortRaw ? String(sortRaw).trim() : "";
+  if (s === "price_asc") {
+    return "l.price_cents ASC, l.updated_at DESC";
+  }
+  if (s === "price_desc") {
+    return "l.price_cents DESC, l.updated_at DESC";
+  }
+  if (s === "year_desc") {
+    return "l.year DESC, l.updated_at DESC";
+  }
+  if (s === "year_asc") {
+    return "l.year ASC, l.updated_at DESC";
+  }
+  return "l.updated_at DESC";
+}
+
 async function list(req, res, next) {
   try {
     const limit = Math.min(
@@ -41,6 +58,9 @@ async function list(req, res, next) {
       : "";
     const setName = req.query.set_name ? String(req.query.set_name).trim() : "";
     const team = req.query.team ? String(req.query.team).trim() : "";
+    const cardNumber = req.query.card_number
+      ? String(req.query.card_number).trim()
+      : "";
     const search = req.query.search ? String(req.query.search).trim() : "";
     const cardType = req.query.card_type
       ? String(req.query.card_type).toUpperCase()
@@ -48,23 +68,29 @@ async function list(req, res, next) {
     const conditionGrade = req.query.condition_grade
       ? String(req.query.condition_grade).trim()
       : "";
-    const yearFrom = req.query.year_from !== undefined
-      ? Number(req.query.year_from)
-      : null;
+    const yearFrom =
+      req.query.year_from !== undefined ? Number(req.query.year_from) : null;
     const yearTo =
       req.query.year_to !== undefined ? Number(req.query.year_to) : null;
-    const minPrice =
-      req.query.min_price !== undefined
-        ? Number(req.query.min_price)
-        : null;
-    const maxPrice =
-      req.query.max_price !== undefined
-        ? Number(req.query.max_price)
-        : null;
+
+    const hasMinEur =
+      req.query.min_price_eur !== undefined &&
+      String(req.query.min_price_eur).trim() !== "";
+    const hasMaxEur =
+      req.query.max_price_eur !== undefined &&
+      String(req.query.max_price_eur).trim() !== "";
+
+    const minPriceCents =
+      req.query.min_price !== undefined ? Number(req.query.min_price) : null;
+    const maxPriceCents =
+      req.query.max_price !== undefined ? Number(req.query.max_price) : null;
+
     const sellerId =
       req.query.seller_id !== undefined
         ? Number(req.query.seller_id)
         : null;
+
+    const orderBy = parseSort(req.query.sort);
 
     const conditions = [`l.status = 'ACTIVE'`];
     const params = [];
@@ -85,6 +111,10 @@ async function list(req, res, next) {
     if (team) {
       conditions.push(`l.team ILIKE $${i++}`);
       params.push(`%${team}%`);
+    }
+    if (cardNumber) {
+      conditions.push(`l.card_number ILIKE $${i++}`);
+      params.push(`%${cardNumber}%`);
     }
     if (search) {
       conditions.push(
@@ -112,14 +142,29 @@ async function list(req, res, next) {
       conditions.push(`l.year <= $${i++}`);
       params.push(yearTo);
     }
-    if (minPrice !== null && !Number.isNaN(minPrice)) {
+
+    if (hasMinEur) {
+      const v = Number(req.query.min_price_eur);
+      if (!Number.isNaN(v) && v >= 0) {
+        conditions.push(`l.price_cents >= $${i++}`);
+        params.push(Math.round(v * 100));
+      }
+    } else if (minPriceCents !== null && !Number.isNaN(minPriceCents)) {
       conditions.push(`l.price_cents >= $${i++}`);
-      params.push(Math.round(minPrice));
+      params.push(Math.round(minPriceCents));
     }
-    if (maxPrice !== null && !Number.isNaN(maxPrice)) {
+
+    if (hasMaxEur) {
+      const v = Number(req.query.max_price_eur);
+      if (!Number.isNaN(v) && v >= 0) {
+        conditions.push(`l.price_cents <= $${i++}`);
+        params.push(Math.round(v * 100));
+      }
+    } else if (maxPriceCents !== null && !Number.isNaN(maxPriceCents)) {
       conditions.push(`l.price_cents <= $${i++}`);
-      params.push(Math.round(maxPrice));
+      params.push(Math.round(maxPriceCents));
     }
+
     if (sellerId !== null && !Number.isNaN(sellerId) && sellerId >= 1) {
       conditions.push(`l.seller_id = $${i++}`);
       params.push(sellerId);
@@ -154,7 +199,7 @@ async function list(req, res, next) {
       FROM listing l
       JOIN app_user u ON u.id = l.seller_id
       WHERE ${conditions.join(" AND ")}
-      ORDER BY l.updated_at DESC
+      ORDER BY ${orderBy}
       LIMIT $${limitIdx} OFFSET $${offsetIdx}
     `;
 
@@ -169,8 +214,27 @@ async function list(req, res, next) {
       query(countSql, params.slice(0, params.length - 2)),
     ]);
 
+    const rows = listRes.rows;
+    const viewerId = req.userId;
+    if (viewerId && rows.length > 0) {
+      const ids = rows.map((r) => r.id);
+      const favRes = await query(
+        `SELECT listing_id FROM favorite
+         WHERE user_id = $1 AND listing_id = ANY($2::int[])`,
+        [viewerId, ids]
+      );
+      const favSet = new Set(favRes.rows.map((r) => r.listing_id));
+      rows.forEach((r) => {
+        r.is_favorited = favSet.has(r.id);
+      });
+    } else {
+      rows.forEach((r) => {
+        r.is_favorited = false;
+      });
+    }
+
     res.json({
-      listings: listRes.rows,
+      listings: rows,
       total: countRes.rows[0].c,
       limit,
       offset,
@@ -187,22 +251,29 @@ async function getById(req, res, next) {
       throw new HttpError(400, "Ungültige ID.");
     }
 
+    const viewer = req.userId !== null && req.userId !== undefined
+      ? req.userId
+      : null;
+
     const result = await query(
       `SELECT
          l.*,
-         u.display_name AS seller_display_name
+         u.display_name AS seller_display_name,
+         ($2::int IS NOT NULL AND EXISTS (
+           SELECT 1 FROM favorite fav
+           WHERE fav.listing_id = l.id AND fav.user_id = $2::int
+         )) AS is_favorited
        FROM listing l
        JOIN app_user u ON u.id = l.seller_id
        WHERE l.id = $1`,
-      [id]
+      [id, viewer]
     );
     const row = result.rows[0];
     if (!row) {
       throw new HttpError(404, "Listing nicht gefunden.");
     }
 
-    const viewerId = req.userId;
-    const isOwner = viewerId !== null && viewerId === row.seller_id;
+    const isOwner = viewer !== null && viewer === row.seller_id;
     if (row.status !== "ACTIVE" && !isOwner) {
       throw new HttpError(404, "Listing nicht gefunden.");
     }

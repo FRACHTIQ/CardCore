@@ -93,4 +93,21 @@ async function remove(req, res, next) {
   }
 }
 
-module.exports = { listMine, add, remove };
+async function check(req, res, next) {
+  try {
+    const listingId = Number(req.params.listingId);
+    if (!Number.isInteger(listingId) || listingId < 1) {
+      throw new HttpError(400, "Ungültige Listing-ID.");
+    }
+
+    const result = await query(
+      `SELECT 1 FROM favorite WHERE user_id = $1 AND listing_id = $2`,
+      [req.userId, listingId]
+    );
+    res.json({ is_favorited: result.rows.length > 0 });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { listMine, add, remove, check };
