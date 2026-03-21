@@ -1,13 +1,38 @@
 const { query } = require("../db");
 const { HttpError } = require("../utils/httpError");
 
+const L = {
+  legal_name: 200,
+  phone: 40,
+  street: 200,
+  address_extra: 200,
+  postal_code: 20,
+  city: 120,
+  country: 2,
+};
+
+function clip(s, max) {
+  return String(s ?? "")
+    .trim()
+    .slice(0, max);
+}
+
+function normCountry(raw) {
+  const s = clip(raw, L.country).toUpperCase();
+  if (s.length === 0) {
+    return "DE";
+  }
+  return s.slice(0, 2);
+}
+
+const ME_SELECT = `SELECT id, email, display_name, bio,
+  legal_name, phone, street, address_extra, postal_code, city, country,
+  created_at, updated_at
+  FROM app_user WHERE id = $1`;
+
 async function getMe(req, res, next) {
   try {
-    const result = await query(
-      `SELECT id, email, display_name, bio, created_at, updated_at
-       FROM app_user WHERE id = $1`,
-      [req.userId]
-    );
+    const result = await query(ME_SELECT, [req.userId]);
     const user = result.rows[0];
     if (!user) {
       throw new HttpError(404, "Benutzer nicht gefunden.");
@@ -27,6 +52,27 @@ async function patchMe(req, res, next) {
     const bio =
       req.body.bio !== undefined ? String(req.body.bio) : null;
 
+    const legalName =
+      req.body.legal_name !== undefined
+        ? clip(req.body.legal_name, L.legal_name)
+        : null;
+    const phone =
+      req.body.phone !== undefined ? clip(req.body.phone, L.phone) : null;
+    const street =
+      req.body.street !== undefined ? clip(req.body.street, L.street) : null;
+    const addressExtra =
+      req.body.address_extra !== undefined
+        ? clip(req.body.address_extra, L.address_extra)
+        : null;
+    const postalCode =
+      req.body.postal_code !== undefined
+        ? clip(req.body.postal_code, L.postal_code)
+        : null;
+    const city =
+      req.body.city !== undefined ? clip(req.body.city, L.city) : null;
+    const country =
+      req.body.country !== undefined ? normCountry(req.body.country) : null;
+
     if (displayName !== null && displayName.length === 0) {
       throw new HttpError(400, "Anzeigename darf nicht leer sein.");
     }
@@ -43,6 +89,34 @@ async function patchMe(req, res, next) {
       fields.push(`bio = $${i++}`);
       values.push(bio);
     }
+    if (legalName !== null) {
+      fields.push(`legal_name = $${i++}`);
+      values.push(legalName);
+    }
+    if (phone !== null) {
+      fields.push(`phone = $${i++}`);
+      values.push(phone);
+    }
+    if (street !== null) {
+      fields.push(`street = $${i++}`);
+      values.push(street);
+    }
+    if (addressExtra !== null) {
+      fields.push(`address_extra = $${i++}`);
+      values.push(addressExtra);
+    }
+    if (postalCode !== null) {
+      fields.push(`postal_code = $${i++}`);
+      values.push(postalCode);
+    }
+    if (city !== null) {
+      fields.push(`city = $${i++}`);
+      values.push(city);
+    }
+    if (country !== null) {
+      fields.push(`country = $${i++}`);
+      values.push(country);
+    }
 
     if (fields.length === 0) {
       throw new HttpError(400, "Keine Felder zum Aktualisieren.");
@@ -54,7 +128,9 @@ async function patchMe(req, res, next) {
     const sql = `
       UPDATE app_user SET ${fields.join(", ")}
       WHERE id = $${i}
-      RETURNING id, email, display_name, bio, created_at, updated_at
+      RETURNING id, email, display_name, bio,
+        legal_name, phone, street, address_extra, postal_code, city, country,
+        created_at, updated_at
     `;
     const result = await query(sql, values);
     res.json({ user: result.rows[0] });

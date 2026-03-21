@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CARDIQ | Markt für Sammler</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #000000;
+            color: #ffffff;
+            margin: 0;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .hero-title {
+            font-weight: 900;
+            font-style: italic;
+            line-height: 0.82;
+            text-transform: uppercase;
+            letter-spacing: -0.05em;
+        }
+
+        /* Brutalist UI - No Shadows, No Gradients */
+        .btn-primary {
+            background-color: #ffffff;
+            color: #000000;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            padding: 24px 48px;
+            transition: background 0.2s;
+        }
+
+        .btn-primary:hover {
+            background-color: #e0e0e0;
+        }
+
+        .btn-secondary {
+            border: 2px solid #333;
+            background-color: transparent;
+            color: #ffffff;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            padding: 24px 48px;
+            transition: border-color 0.2s;
+        }
+
+        .btn-secondary:hover {
+            border-color: #ffffff;
+        }
+
+        /* Real Device Feel */
+        .phone-container {
+            width: 340px;
+            height: 680px;
+            background: #000000;
+            border: 2px solid #1a1a1a;
+            border-radius: 40px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .screen {
+            position: absolute;
+            inset: 0;
+            display: none;
+            flex-direction: column;
+            opacity: 0;
+            transition: opacity 0.4s ease-in-out;
+        }
+
+        .screen.active {
+            display: flex;
+            opacity: 1;
+        }
+
+        /* Hard UI elements from Screenshots */
+        .progress-bar {
+            width: 200px;
+            height: 2px;
+            background: #222;
+            position: relative;
+            margin-top: 20px;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: #fff;
+            width: 0%;
+        }
+
+        .input-field {
+            background: transparent;
+            border: 1px solid #333;
+            padding: 18px;
+            margin-bottom: 12px;
+            width: 100%;
+            font-size: 14px;
+        }
+
+        .item-row {
+            border-bottom: 1px solid #1a1a1a;
+            padding: 20px 0;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+    </style>
+</head>
+<body>
+
+    <nav class="flex justify-between items-center px-12 py-12 max-w-[1600px] mx-auto">
+        <div class="hero-title text-3xl italic tracking-tighter">Cardiq</div>
+        <div class="flex gap-12 text-[11px] font-bold uppercase tracking-[0.3em]">
+            <span class="opacity-20 hidden md:block italic">Berlin 2026</span>
+            <div class="flex gap-4">
+                <button class="text-white">DE</button>
+                <button class="opacity-20 hover:opacity-100 transition">EN</button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-[1600px] mx-auto px-12 flex flex-col lg:flex-row items-center justify-between min-h-[75vh] gap-12">
+        
+        <div class="flex-1">
+            <h1 class="hero-title text-7xl md:text-[110px] lg:text-[130px] mb-12">
+                DEIN<br>
+                MARKTPLATZ<br>
+                FÜR SAMMLER
+            </h1>
+
+            <div class="flex items-center gap-8 mb-16">
+                <div class="flex -space-x-4">
+                    <div class="w-16 h-16 bg-zinc-900 border-2 border-black"></div>
+                    <div class="w-16 h-16 bg-zinc-800 border-2 border-black"></div>
+                    <div class="w-16 h-16 bg-zinc-700 border-2 border-black"></div>
+                </div>
+                <div class="h-12 w-[1px] bg-zinc-800"></div>
+                <div>
+                    <div class="text-2xl font-black italic">15.000+</div>
+                    <p class="text-[10px] uppercase tracking-widest opacity-20">Aktive Sammler</p>
+                </div>
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-6">
+                <button onclick="startSequence()" class="btn-primary text-xs">Demo Starten</button>
+                <button class="btn-secondary text-xs">App Store</button>
+            </div>
+        </div>
+
+        <div class="phone-container">
+            
+            <div id="scr-1" class="screen active items-center justify-center p-12">
+                <div class="hero-title text-4xl mb-4 italic">Cardiq</div>
+                <div class="text-[10px] font-mono opacity-20 mb-2 uppercase" id="perc">0%</div>
+                <div class="progress-bar">
+                    <div id="bar" class="progress-bar-fill"></div>
+                </div>
+                <div class="absolute bottom-16 text-[8px] opacity-10 uppercase tracking-[0.4em] text-center">
+                    Dennis · Basti<br>Berlin Germany
+                </div>
+            </div>
+
+            <div id="scr-2" class="screen p-10 pt-24">
+                <h2 class="text-2xl font-bold mb-10 tracking-tight">Anmelden</h2>
+                <input type="text" id="mail" class="input-field" placeholder="E-Mail" readonly>
+                <input type="password" id="pass" class="input-field" placeholder="Passwort" readonly>
+                <button id="login-btn" class="w-full bg-white/5 text-white/20 py-5 font-bold uppercase tracking-widest text-[11px] mt-6">Anmelden</button>
+            </div>
+
+            <div id="scr-3" class="screen p-8 pt-16">
+                <div class="flex justify-between items-center mb-12">
+                    <div class="hero-title text-xl italic">Cardiq</div>
+                    <div class="w-10 h-10 bg-zinc-900"></div>
+                </div>
+                
+                <div class="item-row">
+                    <div class="w-12 h-16 bg-zinc-900"></div>
+                    <div>
+                        <div class="text-[11px] font-bold">Base Set Charizard</div>
+                        <div class="text-[10px] opacity-20">€ 42.500</div>
+                    </div>
+                </div>
+                <div class="item-row">
+                    <div class="w-12 h-16 bg-zinc-900"></div>
+                    <div>
+                        <div class="text-[11px] font-bold">Alpha Black Lotus</div>
+                        <div class="text-[10px] opacity-20">€ 85.200</div>
+                    </div>
+                </div>
+
+                <div class="mt-auto pb-10">
+                    <div class="text-[10px] opacity-20 uppercase mb-2">Portfolio</div>
+                    <div class="text-3xl font-black italic">€ 127.700</div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <footer class="py-24 border-t border-zinc-900 mt-20 px-12">
+        <div class="max-w-[1600px] mx-auto flex flex-col md:flex-row justify-between items-center opacity-20 text-[10px] font-bold tracking-[0.4em] uppercase">
+            <div class="hero-title text-2xl lowercase italic tracking-tighter mb-8 md:mb-0">cardiq</div>
+            <div class="flex gap-12">
+                <a href="#">Instagram</a>
+                <a href="#">Impressum</a>
+                <a href="#">Support</a>
+            </div>
+            <p class="mt-8 md:mt-0">&copy; 2026 Cardiq GmbH</p>
+        </div>
+    </footer>
+
+    <script>
+        function startSequence() {
+            // Reset state
+            const mail = document.getElementById('mail');
+            const pass = document.getElementById('pass');
+            const bar = document.getElementById('bar');
+            const perc = document.getElementById('perc');
+            const btn = document.getElementById('login-btn');
+            
+            mail.value = ""; pass.value = "";
+            bar.style.width = "0%";
+            
+            // Step 1: Loading
+            let progress = 0;
+            const loadInt = setInterval(() => {
+                progress += 2;
+                bar.style.width = progress + "%";
+                perc.innerText = progress + "%";
+                if(progress >= 100) {
+                    clearInterval(loadInt);
+                    setTimeout(() => transition(1, 2), 600);
+                }
+            }, 30);
+        }
+
+        function transition(from, to) {
+            document.getElementById('scr-' + from).style.opacity = "0";
+            setTimeout(() => {
+                document.getElementById('scr-' + from).classList.remove('active');
+                const next = document.getElementById('scr-' + to);
+                next.classList.add('active');
+                setTimeout(() => next.style.opacity = "1", 50);
+                
+                if(to === 2) startTyping();
+            }, 400);
+        }
+
+        function startTyping() {
+            type("mail", "dennis@cardiq.io", () => {
+                setTimeout(() => {
+                    type("pass", "••••••••", () => {
+                        const btn = document.getElementById('login-btn');
+                        btn.style.background = "#fff";
+                        btn.style.color = "#000";
+                        btn.style.opacity = "1";
+                        setTimeout(() => transition(2, 3), 1000);
+                    });
+                }, 400);
+            });
+        }
+
+        function type(id, text, cb) {
+            const el = document.getElementById(id);
+            let i = 0;
+            const t = setInterval(() => {
+                el.value += text[i];
+                i++;
+                if(i >= text.length) { clearInterval(t); cb(); }
+            }, 50);
+        }
+    </script>
+
+</body>
+</html>

@@ -21,6 +21,13 @@ CREATE TABLE app_user (
   password_hash   TEXT NOT NULL,
   display_name    TEXT NOT NULL DEFAULT '',
   bio             TEXT NOT NULL DEFAULT '',
+  legal_name      TEXT NOT NULL DEFAULT '',
+  phone           TEXT NOT NULL DEFAULT '',
+  street          TEXT NOT NULL DEFAULT '',
+  address_extra   TEXT NOT NULL DEFAULT '',
+  postal_code     TEXT NOT NULL DEFAULT '',
+  city            TEXT NOT NULL DEFAULT '',
+  country         TEXT NOT NULL DEFAULT 'DE',
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
