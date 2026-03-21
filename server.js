@@ -15,6 +15,7 @@ const reviewsRoutes = require("./routes/reviews");
 const aiRoutes = require("./routes/ai");
 const supportRoutes = require("./routes/support");
 const adminRoutes = require("./routes/admin");
+const publicStatsRoutes = require("./routes/publicStats");
 
 const app = express();
 const port = Number(process.env.PORT) || 3000;
@@ -32,6 +33,8 @@ app.get("/health", (req, res) => {
 });
 
 app.get("/api/app/status", appConfigController.publicStatus);
+
+app.use("/api/public", publicStatsRoutes);
 
 app.use("/api/auth", authRoutes);
 app.use("/api/users", usersRoutes);

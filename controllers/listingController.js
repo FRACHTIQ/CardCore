@@ -1,5 +1,6 @@
 const { query } = require("../db");
 const { HttpError } = require("../utils/httpError");
+const { fireAndNotifyNewListing } = require("../services/expoPush");
 
 const CARD_TYPES = new Set([
   "BASE",
@@ -356,7 +357,7 @@ async function update(req, res, next) {
     }
 
     const existing = await query(
-      `SELECT seller_id FROM listing WHERE id = $1`,
+      `SELECT seller_id, status AS old_status FROM listing WHERE id = $1`,
       [id]
     );
     const row = existing.rows[0];
@@ -366,6 +367,7 @@ async function update(req, res, next) {
     if (row.seller_id !== req.userId) {
       throw new HttpError(403, "Keine Berechtigung.");
     }
+    const oldStatus = row.old_status;
 
     const updates = [];
     const params = [];
@@ -440,7 +442,15 @@ async function update(req, res, next) {
       RETURNING *
     `;
     const result = await query(sql, params);
-    res.json({ listing: result.rows[0] });
+    const updated = result.rows[0];
+    if (
+      updated &&
+      updated.status === "ACTIVE" &&
+      oldStatus !== "ACTIVE"
+    ) {
+      fireAndNotifyNewListing(updated, { excludeUserId: req.userId });
+    }
+    res.json({ listing: updated });
   } catch (err) {
     next(err);
   }
