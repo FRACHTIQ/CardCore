@@ -287,7 +287,15 @@ async function getById(req, res, next) {
          ($2::int IS NOT NULL AND EXISTS (
            SELECT 1 FROM favorite fav
            WHERE fav.listing_id = l.id AND fav.user_id = $2::int
-         )) AS is_favorited
+         )) AS is_favorited,
+         CASE
+           WHEN u.show_last_seen IS TRUE
+            AND u.last_seen_at IS NOT NULL
+            AND u.last_seen_at >= NOW() - INTERVAL '5 minutes'
+           THEN TRUE
+           ELSE FALSE
+         END AS seller_is_online,
+         CASE WHEN u.show_last_seen THEN u.last_seen_at ELSE NULL END AS seller_last_seen_at
        FROM listing l
        JOIN app_user u ON u.id = l.seller_id
        WHERE l.id = $1`,
