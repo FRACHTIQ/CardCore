@@ -1,0 +1,756 @@
+/** Optional: window.__CARDCORE_API_BASE__ vor Laden setzen (anderes API-Origin). */
+const API =
+      typeof window !== "undefined" && window.__CARDCORE_API_BASE__ != null
+        ? String(window.__CARDCORE_API_BASE__).replace(/\/$/, "")
+        : "";
+    const LS = "cardcore_admin_token";
+
+    function token() { return localStorage.getItem(LS); }
+    function setToken(t) { if (t) localStorage.setItem(LS, t); else localStorage.removeItem(LS); }
+
+    async function api(path, opts = {}) {
+      const headers = { ...opts.headers, "Content-Type": "application/json" };
+      const tok = token();
+      if (tok) headers.Authorization = "Bearer " + tok;
+      const r = await fetch(API + "/api/admin" + path, { ...opts, headers });
+      const text = await r.text();
+      let data;
+      try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
+      if (!r.ok) throw new Error(data.error || r.statusText || "Fehler");
+      return data;
+    }
+
+    function showLogin() {
+      document.getElementById("view-login").classList.remove("hidden");
+      document.getElementById("view-app").classList.add("hidden");
+    }
+    function showApp() {
+      document.getElementById("view-login").classList.add("hidden");
+      document.getElementById("view-app").classList.remove("hidden");
+    }
+
+    const tabs = [
+      { id: "dashboard", label: "Dashboard" },
+      { id: "users", label: "Nutzer" },
+      { id: "listings", label: "Karten" },
+      { id: "revenue", label: "Umsatz" },
+      { id: "support", label: "Support" },
+      { id: "reports", label: "Meldungen" },
+      { id: "welcome", label: "Willkommen" },
+      { id: "app", label: "App & Wartung" },
+    ];
+    let activeTab = "dashboard";
+
+    function renderTabs() {
+      const el = document.getElementById("tabs");
+      el.innerHTML = tabs.map(t =>
+        `<button type="button" class="${t.id === activeTab ? "active" : ""}" data-tab="${t.id}">${t.label}</button>`
+      ).join("");
+      el.querySelectorAll("button").forEach(b => {
+        b.onclick = () => { activeTab = b.dataset.tab; renderTabs(); showTab(); };
+      });
+    }
+
+    function showTab() {
+      ["dashboard", "users", "listings", "revenue", "support", "reports", "welcome", "app"].forEach(id => {
+        const sec = document.getElementById("tab-" + id);
+        if (sec) sec.classList.toggle("hidden", id !== activeTab);
+      });
+      if (activeTab === "dashboard") loadDashboard();
+      if (activeTab === "users") loadUsers();
+      if (activeTab === "listings") loadListings();
+      if (activeTab === "revenue") loadRevenue();
+      if (activeTab === "support") loadSupport();
+      if (activeTab === "reports") loadReports();
+      if (activeTab === "welcome") loadWelcomeTest();
+      if (activeTab === "app") loadAppSettings();
+    }
+
+    function fmtCents(c) {
+      return (Number(c) / 100).toLocaleString("de-DE", { style: "currency", currency: "EUR" });
+    }
+
+    function escapeHtml(s) {
+      const d = document.createElement("div");
+      d.textContent = s ?? "";
+      return d.innerHTML;
+    }
+
+    function formatDateTime(iso) {
+      if (!iso) return "—";
+      try {
+        return new Date(iso).toLocaleString("de-DE", {
+          dateStyle: "medium",
+          timeStyle: "short",
+        });
+      } catch {
+        return String(iso);
+      }
+    }
+
+    function avatarMarkup(user) {
+      const url = user && user.avatar_url ? String(user.avatar_url) : "";
+      if (user && user.has_avatar && url && /^data:image\//i.test(url)) {
+        const safe = url.replace(/"/g, "&quot;");
+        return `<img class="user-avatar" src="${safe}" alt="" loading="lazy" />`;
+      }
+      if (user && user.has_avatar && url && /^https?:\/\//i.test(url)) {
+        return `<img class="user-avatar" src="${escapeHtml(url)}" alt="" loading="lazy" />`;
+      }
+      return '<div class="user-avatar placeholder">Kein Bild</div>';
+    }
+
+    function userJsonForDebug(user) {
+      const copy = { ...user };
+      const au = copy.avatar_url;
+      if (au != null && String(au).length > 180) {
+        copy.avatar_url = `[ausgeblendet · ${String(au).length} Zeichen]`;
+      }
+      return JSON.stringify(copy, null, 2);
+    }
+
+    async function loadWelcomeTest() {
+      const el = document.getElementById("tab-welcome");
+      el.innerHTML = "<p class=\"muted\">Lade Nutzer…</p>";
+      const esc = (s) => {
+        const d = document.createElement("div");
+        d.textContent = s ?? "";
+        return d.innerHTML;
+      };
+      try {
+        const data = await api("/users?limit=200");
+        const opts = data.users.map((u) =>
+          `<option value="${u.id}">#${u.id} · ${esc(u.email)} · ${esc(u.display_name || "")}</option>`
+        ).join("");
+        el.innerHTML = `
+          <div class="panel">
+            <h2 style="margin:0 0 0.5rem; font-size:1rem;">Willkommens-Testnachricht</h2>
+            <p class="muted" style="margin:0 0 0.75rem; font-size:0.85rem;">
+              Sendet die gleiche automatische Nachricht wie bei der Registrierung (erscheint in <strong>Nachrichten</strong> der App).
+              Funktioniert nicht, wenn der gewählte Nutzer derselbe wie der Absender ist (Standard: User-ID 1).
+            </p>
+            <label>Suche (E-Mail / Name)<input type="search" id="welcome-search" placeholder="Filter…" /></label>
+            <div class="row-actions" style="margin-top:0.5rem">
+              <button type="button" class="secondary" id="welcome-refresh">Liste aktualisieren</button>
+            </div>
+            <label style="margin-top:0.75rem">Nutzer wählen
+              <select id="welcome-user" size="10" style="height:auto; min-height:14rem;">${opts}</select>
+            </label>
+            <p class="muted" style="font-size:0.85rem; margin:0.5rem 0 0;">
+              Alternativ nur User-ID (überschreibt die Auswahl oben):
+              <input type="number" id="welcome-user-id" min="1" placeholder="z. B. 4" style="width:7rem; margin:0 0 0 0.35rem; display:inline-block;" />
+            </p>
+            <button type="button" id="welcome-send">Testnachricht senden</button>
+            <p id="welcome-msg" style="margin-top:0.75rem;"></p>
+            <pre id="welcome-out" class="panel" style="margin-top:0.5rem; display:none; max-height:12rem; overflow:auto;"></pre>
+          </div>`;
+        document.getElementById("welcome-refresh").onclick = async () => {
+          const q = document.getElementById("welcome-search").value.trim();
+          const msg = document.getElementById("welcome-msg");
+          try {
+            const path = "/users?limit=200" + (q ? "&search=" + encodeURIComponent(q) : "");
+            const d = await api(path);
+            const sel = document.getElementById("welcome-user");
+            sel.innerHTML = d.users.map((u) =>
+              `<option value="${u.id}">#${u.id} · ${esc(u.email)} · ${esc(u.display_name || "")}</option>`
+            ).join("");
+            msg.textContent = d.total + " Treffer geladen.";
+            msg.style.color = "var(--muted)";
+          } catch (e) {
+            msg.textContent = e.message;
+            msg.style.color = "var(--danger)";
+          }
+        };
+        document.getElementById("welcome-search").addEventListener("keydown", (ev) => {
+          if (ev.key === "Enter") document.getElementById("welcome-refresh").click();
+        });
+        document.getElementById("welcome-send").onclick = async () => {
+          const msgEl = document.getElementById("welcome-msg");
+          const outEl = document.getElementById("welcome-out");
+          msgEl.textContent = "";
+          outEl.style.display = "none";
+          let uid = parseInt(document.getElementById("welcome-user-id").value, 10);
+          if (!Number.isInteger(uid) || uid < 1) {
+            uid = parseInt(document.getElementById("welcome-user").value, 10);
+          }
+          if (!Number.isInteger(uid) || uid < 1) {
+            msgEl.textContent = "Bitte Nutzer wählen oder gültige User-ID eingeben.";
+            msgEl.style.color = "var(--danger)";
+            return;
+          }
+          try {
+            const res = await api("/welcome-dm", {
+              method: "POST",
+              body: JSON.stringify({ user_id: uid }),
+            });
+            outEl.textContent = JSON.stringify(res, null, 2);
+            outEl.style.display = "block";
+            const ok = res.welcome_dm && res.welcome_dm.sent;
+            msgEl.textContent = ok
+              ? "Gesendet. Der Nutzer sollte die Konversation in der App unter Nachrichten sehen."
+              : "Nicht gesendet: " + (res.welcome_dm && res.welcome_dm.reason ? res.welcome_dm.reason : "siehe JSON unten");
+            msgEl.style.color = ok ? "var(--ok)" : "var(--danger)";
+          } catch (e) {
+            msgEl.textContent = e.message;
+            msgEl.style.color = "var(--danger)";
+          }
+        };
+      } catch (e) {
+        el.innerHTML = "<p class=\"error\">" + esc(e.message) + "</p>";
+      }
+    }
+
+    async function loadAppSettings() {
+      const el = document.getElementById("tab-app");
+      el.innerHTML = "<p class=\"muted\">Lade…</p>";
+      try {
+        const data = await api("/app-settings");
+        const s = data.settings;
+        const mv = escapeHtml(s.min_native_version);
+        const mm = escapeHtml(s.maintenance_message);
+        el.innerHTML = `
+          <div class="panel">
+            <h2 style="margin:0 0 0.5rem; font-size:1rem;">App &amp; Wartung</h2>
+            <p class="muted" style="margin:0 0 0.75rem; font-size:0.85rem;">Mindest-Version (native App, Semver). Liegt die installierte Version darunter, zeigt die App einen Update-Zwang.</p>
+            <label>min_native_version<input type="text" id="min-ver" value="${mv}" /></label>
+            <label style="margin-top:1rem; display:flex; align-items:center; gap:0.5rem; cursor:pointer;">
+              <input type="checkbox" id="maint-enabled" ${s.maintenance_enabled ? "checked" : ""} />
+              Wartungsmodus aktiv
+            </label>
+            <label>Wartungstext (in der App)<textarea id="maint-msg" rows="6">${mm}</textarea></label>
+            <button type="button" id="btn-save-app">Speichern</button>
+            <p id="app-save-msg" class="muted"></p>
+          </div>`;
+        document.getElementById("btn-save-app").onclick = async () => {
+          const msg = document.getElementById("app-save-msg");
+          msg.textContent = "";
+          msg.style.color = "";
+          try {
+            await api("/app-settings", {
+              method: "PATCH",
+              body: JSON.stringify({
+                min_native_version: document.getElementById("min-ver").value.trim(),
+                maintenance_enabled: document.getElementById("maint-enabled").checked,
+                maintenance_message: document.getElementById("maint-msg").value,
+              }),
+            });
+            msg.textContent = "Gespeichert.";
+          } catch (e) {
+            msg.textContent = e.message;
+            msg.style.color = "var(--danger)";
+          }
+        };
+      } catch (e) {
+        el.innerHTML = "<p class=\"error\">" + escapeHtml(e.message) + "</p>";
+      }
+    }
+
+    async function loadDashboard() {
+      const el = document.getElementById("tab-dashboard");
+      el.innerHTML = "<p class=\"muted\">Lade…</p>";
+      try {
+        const d = await api("/dashboard");
+        el.innerHTML = `
+          <div class="grid-kpi">
+            <div class="kpi"><span>Nutzer</span><strong>${d.users_total}</strong></div>
+            <div class="kpi"><span>Verifiziert</span><strong>${d.users_verified}</strong></div>
+            <div class="kpi"><span>Aktive Listings</span><strong>${d.listings_active}</strong></div>
+            <div class="kpi"><span>Verkauft</span><strong>${d.listings_sold}</strong></div>
+            <div class="kpi"><span>Lagerwert (aktiv)</span><strong>${fmtCents(d.inventory_value_active_cents)}</strong></div>
+            <div class="kpi"><span>Umsatz (SOLD)</span><strong>${fmtCents(d.revenue_sold_cents)}</strong></div>
+            <div class="kpi"><span>Support offen</span><strong>${d.support_open}</strong></div>
+            <div class="kpi"><span>Tickets gesamt</span><strong>${d.support_tickets_total}</strong></div>
+            <div class="kpi"><span>Meldungen offen</span><strong>${d.reports_open != null ? d.reports_open : "—"}</strong></div>
+          </div>`;
+      } catch (e) {
+        el.innerHTML = "<p class=\"error\">" + e.message + "</p>";
+      }
+    }
+
+    async function loadUsers() {
+      const el = document.getElementById("tab-users");
+      el.innerHTML = `
+        <div class="panel row-actions">
+          <input type="search" id="user-search" placeholder="Suche E-Mail / Name" style="flex:1;min-width:160px;margin:0" />
+          <button type="button" id="user-refresh">Aktualisieren</button>
+        </div>
+        <div class="panel" id="user-table-wrap">Lade…</div>`;
+      const run = async () => {
+        const q = document.getElementById("user-search").value.trim();
+        const path = "/users?limit=50" + (q ? "&search=" + encodeURIComponent(q) : "");
+        try {
+          const data = await api(path);
+          const rows = data.users.map(u => `<tr>
+            <td>${u.id}</td>
+            <td>${escapeHtml(u.email)}</td>
+            <td>${escapeHtml(u.display_name || "")}</td>
+            <td>${u.role}</td>
+            <td>${u.is_verified ? "ja" : "nein"}</td>
+            <td>${u.suspended_at ? "gesperrt" : "—"}</td>
+            <td><button type="button" class="secondary user-detail" data-id="${u.id}">Details</button></td>
+          </tr>`).join("");
+          document.getElementById("user-table-wrap").innerHTML = `
+            <p class="muted">${data.total} Treffer</p>
+            <table><thead><tr><th>ID</th><th>E-Mail</th><th>Name</th><th>Rolle</th><th>Verif.</th><th>Status</th><th></th></tr></thead>
+            <tbody>${rows || "<tr><td colspan=\"7\">Keine Daten</td></tr>"}</tbody></table>`;
+          document.querySelectorAll(".user-detail").forEach(b => {
+            b.onclick = () => openUserDetail(Number(b.dataset.id));
+          });
+        } catch (e) {
+          document.getElementById("user-table-wrap").innerHTML = "<p class=\"error\">" + e.message + "</p>";
+        }
+      };
+      document.getElementById("user-refresh").onclick = run;
+      document.getElementById("user-search").onchange = run;
+      await run();
+    }
+
+    async function openUserDetail(id) {
+      const el = document.getElementById("tab-users");
+      el.innerHTML = "<p>Lade…</p>";
+      try {
+        const { user, stats } = await api("/users/" + id);
+        const role = user.role || "user";
+        const roleBadge =
+          role === "admin"
+            ? '<span class="badge admin">Admin</span>'
+            : '<span class="badge">User</span>';
+        const verBadge = user.is_verified
+          ? '<span class="badge ok">Verifiziert</span>'
+          : '<span class="badge">Nicht verifiziert</span>';
+        const suspBadge = user.suspended_at
+          ? `<span class="badge warn">Gesperrt · ${formatDateTime(user.suspended_at)}</span>`
+          : '<span class="badge">Aktiv</span>';
+        const addrLine = [
+          user.street,
+          [user.postal_code, user.city].filter(Boolean).join(" "),
+          user.country,
+        ]
+          .filter(Boolean)
+          .join("\n");
+        el.innerHTML = `
+          <div class="panel row-actions">
+            <button type="button" class="secondary" id="user-back">← Liste</button>
+          </div>
+          <div class="panel user-profile">
+            <div class="user-profile-header">
+              ${avatarMarkup(user)}
+              <div class="user-profile-title">
+                <h2>${escapeHtml(user.display_name || "(ohne Anzeigenamen)")}</h2>
+                <p class="mono-small" style="margin:0 0 0.25rem;">${escapeHtml(user.email || "")} · ID ${user.id}</p>
+                <div class="user-badges">${roleBadge}${verBadge}${suspBadge}</div>
+              </div>
+            </div>
+            <div class="user-profile-grid">
+              <div class="user-section">
+                <h3>Über mich</h3>
+                <div class="user-bio">${user.bio ? escapeHtml(user.bio) : '<span class="muted">—</span>'}</div>
+              </div>
+              <div class="user-section">
+                <h3>Kontakt &amp; Adresse</h3>
+                <div class="user-address">
+                  ${user.legal_name ? `<p><strong>Name:</strong> ${escapeHtml(user.legal_name)}</p>` : ""}
+                  ${user.phone ? `<p><strong>Telefon:</strong> ${escapeHtml(user.phone)}</p>` : ""}
+                  ${addrLine ? `<p><strong>Anschrift:</strong><br/>${escapeHtml(addrLine).replace(/\n/g, "<br/>")}</p>` : ""}
+                  ${user.address_extra ? `<p class="muted">${escapeHtml(user.address_extra)}</p>` : ""}
+                  ${!user.legal_name && !user.phone && !addrLine ? '<p class="muted">Keine Angaben</p>' : ""}
+                </div>
+              </div>
+              <div class="user-section">
+                <h3>Statistik</h3>
+                <p class="mono-small" style="margin:0;">
+                  Listings: <strong>${stats.active_listings}</strong> aktiv ·
+                  <strong>${stats.sold_listings}</strong> verkauft ·
+                  <strong>${stats.total_listings}</strong> gesamt
+                </p>
+                <p class="mono-small" style="margin:0.5rem 0 0;">
+                  Erstellt: ${formatDateTime(user.created_at)} ·
+                  Aktualisiert: ${formatDateTime(user.updated_at)}
+                </p>
+              </div>
+            </div>
+            <details class="user-raw-json">
+              <summary>Rohdaten (JSON, Avatar gekürzt)</summary>
+              <pre>${escapeHtml(userJsonForDebug(user))}</pre>
+            </details>
+          </div>
+          <div class="panel">
+            <h3 style="margin:0 0 0.75rem; font-size:0.95rem;">Moderation</h3>
+            <label>Verifiziert
+              <select id="uf-verified"><option value="true">ja</option><option value="false">nein</option></select>
+            </label>
+            <label>Notiz (Verifizierung)<textarea id="uf-note" rows="2"></textarea></label>
+            <label>Rolle
+              <select id="uf-role"><option value="user">user</option><option value="admin">admin</option></select>
+            </label>
+            <label><input type="checkbox" id="uf-suspended" /> Konto sperren</label>
+            <button type="button" id="uf-save">Speichern</button>
+            <p id="uf-msg" class="muted"></p>
+          </div>`;
+        document.getElementById("uf-verified").value = user.is_verified ? "true" : "false";
+        document.getElementById("uf-note").value = user.verification_note || "";
+        document.getElementById("uf-role").value = user.role || "user";
+        document.getElementById("uf-suspended").checked = !!user.suspended_at;
+        document.getElementById("user-back").onclick = () => { loadUsers(); };
+        document.getElementById("uf-save").onclick = async () => {
+          const msg = document.getElementById("uf-msg");
+          msg.textContent = "";
+          try {
+            await api("/users/" + id, {
+              method: "PATCH",
+              body: JSON.stringify({
+                is_verified: document.getElementById("uf-verified").value === "true",
+                verification_note: document.getElementById("uf-note").value,
+                role: document.getElementById("uf-role").value,
+                suspended: document.getElementById("uf-suspended").checked,
+              }),
+            });
+            msg.textContent = "Gespeichert.";
+            openUserDetail(id);
+          } catch (e) {
+            msg.textContent = e.message;
+            msg.className = "error";
+          }
+        };
+      } catch (e) {
+        el.innerHTML = "<p class=\"error\">" + e.message + '</p><button type="button" class="secondary" id="ub">Zurück</button>';
+        document.getElementById("ub").onclick = () => loadUsers();
+      }
+    }
+
+    async function loadListings() {
+      const el = document.getElementById("tab-listings");
+      el.innerHTML = `
+        <div class="panel row-actions">
+          <input type="search" id="list-search" placeholder="Spieler / Hersteller / E-Mail" style="flex:1;min-width:160px;margin:0" />
+          <select id="list-status" style="width:auto;margin:0">
+            <option value="">Alle Status</option>
+            <option>ACTIVE</option><option>SOLD</option><option>DRAFT</option><option>ARCHIVED</option>
+          </select>
+          <button type="button" id="list-refresh">Aktualisieren</button>
+        </div>
+        <div class="panel" id="list-table-wrap">Lade…</div>`;
+      const run = async () => {
+        const q = document.getElementById("list-search").value.trim();
+        const st = document.getElementById("list-status").value;
+        let path = "/listings?limit=50";
+        if (q) path += "&search=" + encodeURIComponent(q);
+        if (st) path += "&status=" + encodeURIComponent(st);
+        try {
+          const data = await api(path);
+          const rows = data.listings.map(l => `<tr>
+            <td>${l.id}</td>
+            <td>${escapeHtml(l.player_name)}</td>
+            <td>${l.status}</td>
+            <td>${fmtCents(l.price_cents)}</td>
+            <td>${escapeHtml(l.seller_email || "")}</td>
+            <td><button type="button" class="secondary list-detail" data-id="${l.id}">Details</button></td>
+          </tr>`).join("");
+          document.getElementById("list-table-wrap").innerHTML = `
+            <p class="muted">${data.total} Treffer</p>
+            <table><thead><tr><th>ID</th><th>Spieler</th><th>Status</th><th>Preis</th><th>Verkäufer</th><th></th></tr></thead>
+            <tbody>${rows || "<tr><td colspan=\"6\">Keine Daten</td></tr>"}</tbody></table>`;
+          document.querySelectorAll(".list-detail").forEach(b => {
+            b.onclick = () => openListingDetail(Number(b.dataset.id));
+          });
+        } catch (e) {
+          document.getElementById("list-table-wrap").innerHTML = "<p class=\"error\">" + e.message + "</p>";
+        }
+      };
+      document.getElementById("list-refresh").onclick = run;
+      document.getElementById("list-search").onchange = run;
+      document.getElementById("list-status").onchange = run;
+      await run();
+    }
+
+    async function openListingDetail(id) {
+      const el = document.getElementById("tab-listings");
+      el.innerHTML = "<p>Lade…</p>";
+      try {
+        const { listing } = await api("/listings/" + id);
+        el.innerHTML = `
+          <div class="panel row-actions">
+            <button type="button" class="secondary" id="ld-back">← Liste</button>
+          </div>
+          <div class="panel">
+            <pre>${escapeHtml(JSON.stringify(listing, null, 2))}</pre>
+            <label>Status ändern
+              <select id="ld-status">
+                <option>DRAFT</option><option>ACTIVE</option><option>SOLD</option><option>ARCHIVED</option>
+              </select>
+            </label>
+            <button type="button" id="ld-save">Speichern</button>
+            <p id="ld-msg" class="muted"></p>
+          </div>`;
+        document.getElementById("ld-status").value = listing.status;
+        document.getElementById("ld-back").onclick = () => loadListings();
+        document.getElementById("ld-save").onclick = async () => {
+          const msg = document.getElementById("ld-msg");
+          msg.textContent = "";
+          try {
+            await api("/listings/" + id, {
+              method: "PATCH",
+              body: JSON.stringify({ status: document.getElementById("ld-status").value }),
+            });
+            msg.textContent = "Gespeichert.";
+          } catch (e) {
+            msg.textContent = e.message;
+            msg.className = "error";
+          }
+        };
+      } catch (e) {
+        el.innerHTML = "<p class=\"error\">" + e.message + '</p><button type="button" class="secondary" id="lb">Zurück</button>';
+        document.getElementById("lb").onclick = () => loadListings();
+      }
+    }
+
+    async function loadRevenue() {
+      const el = document.getElementById("tab-revenue");
+      el.innerHTML = "<p class=\"muted\">Lade…</p>";
+      try {
+        const data = await api("/revenue");
+        const rows = data.by_status.map(r => `<tr>
+          <td>${r.status}</td>
+          <td>${r.c}</td>
+          <td>${fmtCents(r.total_cents)}</td>
+        </tr>`).join("");
+        el.innerHTML = `<div class="panel"><table><thead><tr><th>Status</th><th>Anzahl</th><th>Summe Preis (cent)</th></tr></thead>
+          <tbody>${rows}</tbody></table></div>`;
+      } catch (e) {
+        el.innerHTML = "<p class=\"error\">" + e.message + "</p>";
+      }
+    }
+
+    let supportTicketId = null;
+
+    async function loadSupport() {
+      supportTicketId = null;
+      const el = document.getElementById("tab-support");
+      el.innerHTML = `<div class="panel" id="sup-list-wrap">Lade…</div>`;
+      try {
+        const data = await api("/support/tickets?limit=80");
+        const rows = data.tickets.map(t => `<tr>
+          <td>${t.id}</td>
+          <td>${escapeHtml(t.subject)}</td>
+          <td>${t.status}</td>
+          <td>${escapeHtml(t.user_email || "")}</td>
+          <td><button type="button" class="secondary sup-open" data-id="${t.id}">Öffnen</button></td>
+        </tr>`).join("");
+        document.getElementById("sup-list-wrap").innerHTML = `
+          <p class="muted">${data.total} Tickets</p>
+          <table><thead><tr><th>ID</th><th>Betreff</th><th>Status</th><th>Nutzer</th><th></th></tr></thead>
+          <tbody>${rows || "<tr><td colspan=\"5\">Keine</td></tr>"}</tbody></table>`;
+        document.querySelectorAll(".sup-open").forEach(b => {
+          b.onclick = () => openSupportTicket(Number(b.dataset.id));
+        });
+      } catch (e) {
+        document.getElementById("sup-list-wrap").innerHTML = "<p class=\"error\">" + e.message + "</p>";
+      }
+    }
+
+    async function loadReports() {
+      const el = document.getElementById("tab-reports");
+      el.innerHTML = `<div class="panel row-actions">
+        <select id="rep-filter" style="width:auto;margin:0">
+          <option value="all">Alle Status</option>
+          <option value="open">open</option>
+          <option value="reviewed">reviewed</option>
+          <option value="dismissed">dismissed</option>
+        </select>
+        <button type="button" id="rep-refresh">Aktualisieren</button>
+      </div>
+      <div class="panel" id="rep-wrap">Lade…</div>`;
+      const run = async () => {
+        const f = document.getElementById("rep-filter").value;
+        let path = "/reports?limit=100";
+        if (f && f !== "all") path += "&status=" + encodeURIComponent(f);
+        try {
+          const data = await api(path);
+          const rows = data.reports.map(r => `<tr>
+            <td>${r.id}</td>
+            <td>${escapeHtml(String(r.reason || ""))}</td>
+            <td>${escapeHtml(String(r.status || ""))}</td>
+            <td>${escapeHtml(r.reporter_email || "")}</td>
+            <td>${escapeHtml(r.reported_email || "")}</td>
+            <td>${escapeHtml(String(r.created_at || ""))}</td>
+            <td><button type="button" class="secondary rep-open" data-id="${r.id}">Details</button></td>
+          </tr>`).join("");
+          document.getElementById("rep-wrap").innerHTML = `
+            <p class="muted">${data.total} Meldungen</p>
+            <table><thead><tr><th>ID</th><th>Grund</th><th>Status</th><th>Melder</th><th>Gemeldet</th><th>Zeit</th><th></th></tr></thead>
+            <tbody>${rows || "<tr><td colspan=\"7\">Keine</td></tr>"}</tbody></table>`;
+          document.querySelectorAll(".rep-open").forEach(b => {
+            b.onclick = () => openReportDetail(Number(b.dataset.id));
+          });
+        } catch (e) {
+          document.getElementById("rep-wrap").innerHTML = "<p class=\"error\">" + escapeHtml(e.message) + "</p>";
+        }
+      };
+      document.getElementById("rep-refresh").onclick = run;
+      document.getElementById("rep-filter").onchange = run;
+      await run();
+    }
+
+    async function openReportDetail(id) {
+      const el = document.getElementById("tab-reports");
+      el.innerHTML = "<p>Lade…</p>";
+      try {
+        const data = await api("/reports/" + id);
+        const r = data.report;
+        el.innerHTML = `
+          <div class="panel row-actions">
+            <button type="button" class="secondary" id="rep-back">← Liste</button>
+            <select id="rep-st" style="width:auto;margin:0">
+              <option value="open">open</option>
+              <option value="reviewed">reviewed</option>
+              <option value="dismissed">dismissed</option>
+            </select>
+            <button type="button" id="rep-save-st">Status speichern</button>
+          </div>
+          <div class="panel">
+            <p><strong>Meldung #${r.id}</strong> · ${escapeHtml(String(r.created_at || ""))}</p>
+            <p class="muted">Grund: ${escapeHtml(String(r.reason || ""))}</p>
+            ${r.details ? "<pre style=\"white-space:pre-wrap\">" + escapeHtml(r.details) + "</pre>" : ""}
+            <p>Melder: ${escapeHtml(r.reporter_display_name || "")} (${escapeHtml(r.reporter_email || "")}) · ID ${r.reporter_id}</p>
+            <p>Gemeldet: ${escapeHtml(r.reported_display_name || "")} (${escapeHtml(r.reported_email || "")}) · ID ${r.reported_id}</p>
+            <p id="rep-msg" class="muted"></p>
+          </div>`;
+        document.getElementById("rep-st").value = String(r.status || "open").toLowerCase();
+        document.getElementById("rep-back").onclick = () => loadReports();
+        document.getElementById("rep-save-st").onclick = async () => {
+          const msg = document.getElementById("rep-msg");
+          msg.textContent = "";
+          msg.className = "muted";
+          try {
+            await api("/reports/" + id, {
+              method: "PATCH",
+              body: JSON.stringify({ status: document.getElementById("rep-st").value }),
+            });
+            msg.textContent = "Gespeichert.";
+          } catch (e) {
+            msg.textContent = e.message;
+            msg.className = "error";
+          }
+        };
+      } catch (e) {
+        el.innerHTML = "<p class=\"error\">" + escapeHtml(e.message) + '</p><button type="button" class="secondary" id="rb">Zurück</button>';
+        document.getElementById("rb").onclick = () => loadReports();
+      }
+    }
+
+    async function openSupportTicket(id) {
+      supportTicketId = id;
+      const el = document.getElementById("tab-support");
+      el.innerHTML = "<p>Lade…</p>";
+      try {
+        const data = await api("/support/tickets/" + id);
+        const msgs = data.messages.map(m =>
+          `<div class="panel"><strong>${m.from_user ? "Nutzer" : "Team"}</strong> · ${m.created_at}<pre>${escapeHtml(m.body)}</pre></div>`
+        ).join("");
+        el.innerHTML = `
+          <div class="panel row-actions">
+            <button type="button" class="secondary" id="sup-back">← Liste</button>
+            <select id="sup-st" style="width:auto;margin:0">
+              <option>OPEN</option><option>WAITING_STAFF</option><option>ANSWERED</option><option>CLOSED</option>
+            </select>
+            <button type="button" id="sup-save-st">Status setzen</button>
+          </div>
+          <div class="panel"><strong>Ticket #${data.ticket.id}</strong> · ${escapeHtml(data.ticket.subject)}</div>
+          ${msgs}
+          <div class="panel">
+            <label>Antwort (Staff)<textarea id="sup-reply" rows="4"></textarea></label>
+            <button type="button" id="sup-send">Senden</button>
+            <p id="sup-msg" class="muted"></p>
+          </div>`;
+        document.getElementById("sup-st").value = data.ticket.status;
+        document.getElementById("sup-back").onclick = () => loadSupport();
+        document.getElementById("sup-save-st").onclick = async () => {
+          const msg = document.getElementById("sup-msg");
+          try {
+            await api("/support/tickets/" + id, {
+              method: "PATCH",
+              body: JSON.stringify({ status: document.getElementById("sup-st").value }),
+            });
+            msg.textContent = "Status gespeichert.";
+          } catch (e) {
+            msg.textContent = e.message;
+            msg.className = "error";
+          }
+        };
+        document.getElementById("sup-send").onclick = async () => {
+          const body = document.getElementById("sup-reply").value;
+          const msg = document.getElementById("sup-msg");
+          try {
+            await api("/support/tickets/" + id + "/messages", {
+              method: "POST",
+              body: JSON.stringify({ body }),
+            });
+            msg.textContent = "Gesendet.";
+            openSupportTicket(id);
+          } catch (e) {
+            msg.textContent = e.message;
+            msg.className = "error";
+          }
+        };
+      } catch (e) {
+        el.innerHTML = "<p class=\"error\">" + e.message + '</p><button type="button" class="secondary" id="sb">Zurück</button>';
+        document.getElementById("sb").onclick = () => loadSupport();
+      }
+    }
+
+    document.getElementById("btn-login").onclick = async () => {
+      const err = document.getElementById("login-error");
+      err.classList.add("hidden");
+      const email = document.getElementById("login-email").value.trim();
+      const password = document.getElementById("login-password").value;
+      try {
+        const r = await fetch(API + "/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        });
+        const text = await r.text();
+        let data = {};
+        try {
+          data = text ? JSON.parse(text) : {};
+        } catch {
+          throw new Error(
+            text
+              ? "Unerwartete Antwort vom Server (kein JSON). Prüfe API-URL / Proxy."
+              : `Netzwerkfehler (HTTP ${r.status}).`
+          );
+        }
+        if (!r.ok) {
+          throw new Error(data.error || `Login fehlgeschlagen (HTTP ${r.status}).`);
+        }
+        if (!data.user || data.user.role !== "admin") {
+          setToken(null);
+          throw new Error("Kein Admin-Konto (Rolle muss „admin“ sein).");
+        }
+        setToken(data.token);
+        showApp();
+        document.getElementById("who").textContent = data.user.email;
+        renderTabs();
+        showTab();
+      } catch (e) {
+        err.textContent =
+          e && e.message
+            ? e.message
+            : "Verbindung fehlgeschlagen. Netzwerk / CORS / falsche API-Adresse?";
+        err.classList.remove("hidden");
+      }
+    };
+
+    document.getElementById("btn-logout").onclick = () => {
+      setToken(null);
+      showLogin();
+    };
+
+    if (token()) {
+      showApp();
+      document.getElementById("who").textContent = "(Session)";
+      renderTabs();
+      showTab();
+    } else {
+      showLogin();
+    }
