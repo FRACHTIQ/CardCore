@@ -35,12 +35,18 @@ router.post("/register", async (req, res) => {
     );
     const user = result.rows[0];
     const token = signToken(user.id);
+    let welcomeDm = { sent: false, reason: "error" };
     try {
-      await sendWelcomeDmToNewUser(user.id);
+      welcomeDm = await sendWelcomeDmToNewUser(user.id);
     } catch (e) {
       console.error("[auth] welcome DM:", e && e.stack ? e.stack : e);
+      welcomeDm = { sent: false, reason: "exception" };
     }
-    return res.status(201).json({ user: { id: user.id, email: user.email }, token });
+    return res.status(201).json({
+      user: { id: user.id, email: user.email },
+      token,
+      welcome_dm: welcomeDm,
+    });
   } catch (err) {
     if (err.code === "23505") {
       return res.status(409).json({ error: "E-Mail ist bereits registriert." });
