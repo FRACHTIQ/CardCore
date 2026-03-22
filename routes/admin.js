@@ -22,6 +22,10 @@ router.get("/listings", admin.listListings);
 router.get("/listings/:id", admin.getListing);
 router.patch("/listings/:id", admin.patchListing);
 
+router.get("/reports", admin.listUserReports);
+router.get("/reports/:id", admin.getUserReport);
+router.patch("/reports/:id", admin.patchUserReport);
+
 router.get("/support/tickets", admin.listSupportTickets);
 router.get("/support/tickets/:id", admin.getSupportTicket);
 router.post("/support/tickets/:id/messages", admin.postSupportReply);

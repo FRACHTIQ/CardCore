@@ -19,6 +19,7 @@ async function dashboard(req, res, next) {
       listingsSold,
       supportOpen,
       supportTotal,
+      reportsOpen,
       revenue,
     ] = await Promise.all([
       query(`SELECT COUNT(*)::int AS c FROM app_user`),
@@ -31,6 +32,9 @@ async function dashboard(req, res, next) {
         `SELECT COUNT(*)::int AS c FROM support_ticket WHERE status IN ('OPEN','WAITING_STAFF')`
       ),
       query(`SELECT COUNT(*)::int AS c FROM support_ticket`),
+      query(
+        `SELECT COUNT(*)::int AS c FROM user_report WHERE lower(status) = 'open'`
+      ),
       query(
         `SELECT COALESCE(SUM(price_cents), 0)::bigint AS cents
          FROM listing WHERE status = 'SOLD'`
@@ -51,6 +55,7 @@ async function dashboard(req, res, next) {
       revenue_sold_cents: Number(revenue.rows[0].c),
       support_open: supportOpen.rows[0].c,
       support_tickets_total: supportTotal.rows[0].c,
+      reports_open: reportsOpen.rows[0].c,
     });
   } catch (err) {
     next(err);
@@ -474,6 +479,123 @@ async function patchSupportTicket(req, res, next) {
   }
 }
 
+const REPORT_STATUSES = new Set(["open", "reviewed", "dismissed"]);
+
+async function listUserReports(req, res, next) {
+  try {
+    const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 50));
+    const offset = Math.max(0, Number(req.query.offset) || 0);
+    const raw = req.query.status ? String(req.query.status).trim().toLowerCase() : "";
+    const statusFilter = raw === "" || raw === "all" ? null : raw;
+    if (statusFilter && !REPORT_STATUSES.has(statusFilter)) {
+      throw new HttpError(400, "Ungültiger Status-Filter.");
+    }
+
+    const params = [];
+    let where = "";
+    let i = 1;
+    if (statusFilter) {
+      where = `WHERE lower(trim(r.status)) = $${i++}`;
+      params.push(statusFilter);
+    }
+
+    const countRes = await query(
+      `SELECT COUNT(*)::int AS c FROM user_report r ${where}`,
+      params
+    );
+    const listParams = [...params, limit, offset];
+    const listSql = `
+      SELECT
+        r.id,
+        r.reporter_id,
+        r.reported_id,
+        r.reason,
+        r.details,
+        r.status,
+        r.created_at,
+        rep.email AS reporter_email,
+        rep.display_name AS reporter_display_name,
+        tgt.email AS reported_email,
+        tgt.display_name AS reported_display_name
+      FROM user_report r
+      JOIN app_user rep ON rep.id = r.reporter_id
+      JOIN app_user tgt ON tgt.id = r.reported_id
+      ${where}
+      ORDER BY r.created_at DESC
+      LIMIT $${i} OFFSET $${i + 1}`;
+    const listRes = await query(listSql, listParams);
+
+    res.json({
+      total: countRes.rows[0].c,
+      reports: listRes.rows,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function getUserReport(req, res, next) {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id < 1) {
+      throw new HttpError(400, "Ungültige ID.");
+    }
+    const result = await query(
+      `SELECT
+         r.id,
+         r.reporter_id,
+         r.reported_id,
+         r.reason,
+         r.details,
+         r.status,
+         r.created_at,
+         rep.email AS reporter_email,
+         rep.display_name AS reporter_display_name,
+         tgt.email AS reported_email,
+         tgt.display_name AS reported_display_name
+       FROM user_report r
+       JOIN app_user rep ON rep.id = r.reporter_id
+       JOIN app_user tgt ON tgt.id = r.reported_id
+       WHERE r.id = $1`,
+      [id]
+    );
+    const row = result.rows[0];
+    if (!row) {
+      throw new HttpError(404, "Meldung nicht gefunden.");
+    }
+    res.json({ report: row });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function patchUserReport(req, res, next) {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id < 1) {
+      throw new HttpError(400, "Ungültige ID.");
+    }
+    const status = req.body.status !== undefined
+      ? String(req.body.status).trim().toLowerCase()
+      : null;
+    if (!status || !REPORT_STATUSES.has(status)) {
+      throw new HttpError(400, "Gültiger status erforderlich (open, reviewed, dismissed).");
+    }
+    const result = await query(
+      `UPDATE user_report SET status = $1 WHERE id = $2
+       RETURNING id, status, reason, details, reporter_id, reported_id, created_at`,
+      [status, id]
+    );
+    const row = result.rows[0];
+    if (!row) {
+      throw new HttpError(404, "Meldung nicht gefunden.");
+    }
+    res.json({ report: row });
+  } catch (err) {
+    next(err);
+  }
+}
+
 /** Willkommens-DM für einen User nachträglich auslösen (läuft auf dem Server, z. B. Railway). */
 async function postWelcomeDm(req, res, next) {
   try {
@@ -501,5 +623,8 @@ module.exports = {
   getSupportTicket,
   postSupportReply,
   patchSupportTicket,
+  listUserReports,
+  getUserReport,
+  patchUserReport,
   postWelcomeDm,
 };
