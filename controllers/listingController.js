@@ -218,7 +218,8 @@ async function list(req, res, next) {
         l.market_value_source,
         l.created_at,
         l.updated_at,
-        u.display_name AS seller_display_name
+        u.display_name AS seller_display_name,
+        (u.role = 'admin') AS seller_is_admin
       FROM listing l
       JOIN app_user u ON u.id = l.seller_id
       WHERE ${conditions.join(" AND ")}
@@ -295,7 +296,8 @@ async function getById(req, res, next) {
            THEN TRUE
            ELSE FALSE
          END AS seller_is_online,
-         CASE WHEN u.show_last_seen THEN u.last_seen_at ELSE NULL END AS seller_last_seen_at
+         CASE WHEN u.show_last_seen THEN u.last_seen_at ELSE NULL END AS seller_last_seen_at,
+         (u.role = 'admin') AS seller_is_admin
        FROM listing l
        JOIN app_user u ON u.id = l.seller_id
        WHERE l.id = $1`,

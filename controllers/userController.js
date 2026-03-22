@@ -399,7 +399,8 @@ async function getPublicProfile(req, res, next) {
          COALESCE((SELECT AVG(r.rating)::float FROM review r WHERE r.seller_id = u.id), 0) AS rating_avg,
          COALESCE((SELECT COUNT(*)::int FROM review r WHERE r.seller_id = u.id), 0) AS rating_count,
          COALESCE((SELECT COUNT(*)::int FROM listing l WHERE l.seller_id = u.id AND l.status = 'ACTIVE'), 0) AS active_listings_count,
-         COALESCE((SELECT COUNT(*)::int FROM listing l WHERE l.seller_id = u.id AND l.status = 'SOLD'), 0) AS sold_count
+         COALESCE((SELECT COUNT(*)::int FROM listing l WHERE l.seller_id = u.id AND l.status = 'SOLD'), 0) AS sold_count,
+         (u.role = 'admin') AS is_admin
        FROM app_user u
        WHERE u.id = $1`,
       [id]
@@ -428,6 +429,7 @@ async function getPublicProfile(req, res, next) {
         active_listings_count: row.active_listings_count,
         sold_count: row.sold_count,
         viewer_has_blocked: viewerHasBlocked,
+        is_admin: Boolean(row.is_admin),
       },
     });
   } catch (err) {
