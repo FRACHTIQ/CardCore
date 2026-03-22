@@ -1,10 +1,27 @@
 /**
  * Willkommens-DM nachträglich auslösen (z. B. User existierte vor dem Feature).
  *
- *   set DATABASE_URL=...   (oder .env)
- *   node scripts/sendWelcomeDm.js 4
+ * Voraussetzung: dieselbe DATABASE_URL wie Railway (Postgres).
+ *
+ * Option A – Datei CardCore/.env mit Zeile:
+ *   DATABASE_URL=postgresql://USER:PASS@HOST:PORT/DATABASE
+ *
+ * Option B – PowerShell (Session):
+ *   $env:DATABASE_URL="postgresql://..."
+ *   npm run welcome-dm -- 4
  */
-require("dotenv").config();
+const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
+
+if (!String(process.env.DATABASE_URL || "").trim()) {
+  console.error(
+    "Fehler: DATABASE_URL ist nicht gesetzt.\n" +
+      "Lege in CardCore eine Datei .env an (von Railway → Postgres → Connect kopieren)\n" +
+      "oder setze in PowerShell: $env:DATABASE_URL=\"postgresql://...\""
+  );
+  process.exit(1);
+}
+
 const { sendWelcomeDmToNewUser } = require("../services/welcomeDm");
 
 async function main() {
