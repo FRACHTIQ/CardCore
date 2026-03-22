@@ -1,4 +1,5 @@
 -- Öffentliche Review-Liste (Profil-Snippets). Idempotent mit CardCore-kompatiblem Schema.
+-- Voraussetzung: Tabelle listing existiert (bei leerer DB zuerst 016_marketplace_messaging_core.sql).
 CREATE TABLE IF NOT EXISTS review (
   id           SERIAL PRIMARY KEY,
   reviewer_id  INTEGER NOT NULL REFERENCES app_user (id) ON DELETE CASCADE,

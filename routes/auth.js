@@ -45,7 +45,13 @@ router.post("/register", async (req, res) => {
       welcomeDm = { sent: false, reason: "exception" };
     }
     return res.status(201).json({
-      user: { id: user.id, email: user.email },
+      user: {
+        id: user.id,
+        email: user.email,
+        is_admin: Boolean(user.is_admin),
+        social_network_enabled: Boolean(user.social_network_enabled),
+        social_network_unlocked: socialUnlocked(user),
+      },
       token,
       welcome_dm: welcomeDm,
     });
@@ -101,7 +107,8 @@ router.post("/login", async (req, res) => {
 router.get("/me", authRequired, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, email, is_admin, social_network_enabled, social_links
+      `SELECT id, email, is_admin, social_network_enabled, social_links,
+              avg_response_hours, response_metric_samples
        FROM app_user WHERE id = $1`,
       [req.userId]
     );
@@ -118,6 +125,9 @@ router.get("/me", authRequired, async (req, res) => {
         social_network_enabled: Boolean(u.social_network_enabled),
         social_network_unlocked: unlocked,
         social_links: unlocked ? u.social_links : [],
+        avg_response_hours:
+          u.avg_response_hours != null ? Number(u.avg_response_hours) : null,
+        response_metric_samples: Number(u.response_metric_samples || 0),
       },
     });
   } catch (err) {
