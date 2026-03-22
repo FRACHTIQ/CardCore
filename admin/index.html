@@ -138,6 +138,7 @@
       <section id="tab-listings" class="hidden"></section>
       <section id="tab-revenue" class="hidden"></section>
       <section id="tab-support" class="hidden"></section>
+      <section id="tab-reports" class="hidden"></section>
       <section id="tab-app" class="hidden"></section>
       <section id="tab-welcome" class="hidden"></section>
     </main>
@@ -177,6 +178,7 @@
       { id: "listings", label: "Karten" },
       { id: "revenue", label: "Umsatz" },
       { id: "support", label: "Support" },
+      { id: "reports", label: "Meldungen" },
       { id: "welcome", label: "Willkommen" },
       { id: "app", label: "App & Wartung" },
     ];
@@ -193,7 +195,7 @@
     }
 
     function showTab() {
-      ["dashboard", "users", "listings", "revenue", "support", "welcome", "app"].forEach(id => {
+      ["dashboard", "users", "listings", "revenue", "support", "reports", "welcome", "app"].forEach(id => {
         const sec = document.getElementById("tab-" + id);
         if (sec) sec.classList.toggle("hidden", id !== activeTab);
       });
@@ -202,6 +204,7 @@
       if (activeTab === "listings") loadListings();
       if (activeTab === "revenue") loadRevenue();
       if (activeTab === "support") loadSupport();
+      if (activeTab === "reports") loadReports();
       if (activeTab === "welcome") loadWelcomeTest();
       if (activeTab === "app") loadAppSettings();
     }
@@ -368,6 +371,7 @@
             <div class="kpi"><span>Umsatz (SOLD)</span><strong>${fmtCents(d.revenue_sold_cents)}</strong></div>
             <div class="kpi"><span>Support offen</span><strong>${d.support_open}</strong></div>
             <div class="kpi"><span>Tickets gesamt</span><strong>${d.support_tickets_total}</strong></div>
+            <div class="kpi"><span>Meldungen offen</span><strong>${d.reports_open != null ? d.reports_open : "—"}</strong></div>
           </div>`;
       } catch (e) {
         el.innerHTML = "<p class=\"error\">" + e.message + "</p>";
@@ -599,6 +603,96 @@
         });
       } catch (e) {
         document.getElementById("sup-list-wrap").innerHTML = "<p class=\"error\">" + e.message + "</p>";
+      }
+    }
+
+    async function loadReports() {
+      const el = document.getElementById("tab-reports");
+      el.innerHTML = `<div class="panel row-actions">
+        <select id="rep-filter" style="width:auto;margin:0">
+          <option value="all">Alle Status</option>
+          <option value="open">open</option>
+          <option value="reviewed">reviewed</option>
+          <option value="dismissed">dismissed</option>
+        </select>
+        <button type="button" id="rep-refresh">Aktualisieren</button>
+      </div>
+      <div class="panel" id="rep-wrap">Lade…</div>`;
+      const run = async () => {
+        const f = document.getElementById("rep-filter").value;
+        let path = "/reports?limit=100";
+        if (f && f !== "all") path += "&status=" + encodeURIComponent(f);
+        try {
+          const data = await api(path);
+          const rows = data.reports.map(r => `<tr>
+            <td>${r.id}</td>
+            <td>${escapeHtml(String(r.reason || ""))}</td>
+            <td>${escapeHtml(String(r.status || ""))}</td>
+            <td>${escapeHtml(r.reporter_email || "")}</td>
+            <td>${escapeHtml(r.reported_email || "")}</td>
+            <td>${escapeHtml(String(r.created_at || ""))}</td>
+            <td><button type="button" class="secondary rep-open" data-id="${r.id}">Details</button></td>
+          </tr>`).join("");
+          document.getElementById("rep-wrap").innerHTML = `
+            <p class="muted">${data.total} Meldungen</p>
+            <table><thead><tr><th>ID</th><th>Grund</th><th>Status</th><th>Melder</th><th>Gemeldet</th><th>Zeit</th><th></th></tr></thead>
+            <tbody>${rows || "<tr><td colspan=\"7\">Keine</td></tr>"}</tbody></table>`;
+          document.querySelectorAll(".rep-open").forEach(b => {
+            b.onclick = () => openReportDetail(Number(b.dataset.id));
+          });
+        } catch (e) {
+          document.getElementById("rep-wrap").innerHTML = "<p class=\"error\">" + escapeHtml(e.message) + "</p>";
+        }
+      };
+      document.getElementById("rep-refresh").onclick = run;
+      document.getElementById("rep-filter").onchange = run;
+      await run();
+    }
+
+    async function openReportDetail(id) {
+      const el = document.getElementById("tab-reports");
+      el.innerHTML = "<p>Lade…</p>";
+      try {
+        const data = await api("/reports/" + id);
+        const r = data.report;
+        el.innerHTML = `
+          <div class="panel row-actions">
+            <button type="button" class="secondary" id="rep-back">← Liste</button>
+            <select id="rep-st" style="width:auto;margin:0">
+              <option value="open">open</option>
+              <option value="reviewed">reviewed</option>
+              <option value="dismissed">dismissed</option>
+            </select>
+            <button type="button" id="rep-save-st">Status speichern</button>
+          </div>
+          <div class="panel">
+            <p><strong>Meldung #${r.id}</strong> · ${escapeHtml(String(r.created_at || ""))}</p>
+            <p class="muted">Grund: ${escapeHtml(String(r.reason || ""))}</p>
+            ${r.details ? "<pre style=\"white-space:pre-wrap\">" + escapeHtml(r.details) + "</pre>" : ""}
+            <p>Melder: ${escapeHtml(r.reporter_display_name || "")} (${escapeHtml(r.reporter_email || "")}) · ID ${r.reporter_id}</p>
+            <p>Gemeldet: ${escapeHtml(r.reported_display_name || "")} (${escapeHtml(r.reported_email || "")}) · ID ${r.reported_id}</p>
+            <p id="rep-msg" class="muted"></p>
+          </div>`;
+        document.getElementById("rep-st").value = String(r.status || "open").toLowerCase();
+        document.getElementById("rep-back").onclick = () => loadReports();
+        document.getElementById("rep-save-st").onclick = async () => {
+          const msg = document.getElementById("rep-msg");
+          msg.textContent = "";
+          msg.className = "muted";
+          try {
+            await api("/reports/" + id, {
+              method: "PATCH",
+              body: JSON.stringify({ status: document.getElementById("rep-st").value }),
+            });
+            msg.textContent = "Gespeichert.";
+          } catch (e) {
+            msg.textContent = e.message;
+            msg.className = "error";
+          }
+        };
+      } catch (e) {
+        el.innerHTML = "<p class=\"error\">" + escapeHtml(e.message) + '</p><button type="button" class="secondary" id="rb">Zurück</button>';
+        document.getElementById("rb").onclick = () => loadReports();
       }
     }
 
