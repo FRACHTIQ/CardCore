@@ -2,6 +2,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { query } = require("../db");
 const { HttpError } = require("../utils/httpError");
+const { sendWelcomeDmToNewUser } = require("../services/welcomeDm");
 
 function signToken(userId) {
   return jwt.sign(
@@ -43,6 +44,11 @@ async function register(req, res, next) {
     );
     const user = result.rows[0];
     const token = signToken(user.id);
+    try {
+      await sendWelcomeDmToNewUser(user.id);
+    } catch (e) {
+      console.error("[auth] welcome DM:", e && e.stack ? e.stack : e);
+    }
     res.status(201).json({
       user: {
         id: user.id,
