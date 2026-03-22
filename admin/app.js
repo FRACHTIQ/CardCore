@@ -71,10 +71,42 @@ const API =
     }
 
     function escapeHtml(s) {
-      return String(s ?? "")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/"/g, "&quot;");
+      const d = document.createElement("div");
+      d.textContent = s ?? "";
+      return d.innerHTML;
+    }
+
+    function formatDateTime(iso) {
+      if (!iso) return "—";
+      try {
+        return new Date(iso).toLocaleString("de-DE", {
+          dateStyle: "medium",
+          timeStyle: "short",
+        });
+      } catch {
+        return String(iso);
+      }
+    }
+
+    function avatarMarkup(user) {
+      const url = user && user.avatar_url ? String(user.avatar_url) : "";
+      if (user && user.has_avatar && url && /^data:image\//i.test(url)) {
+        const safe = url.replace(/"/g, "&quot;");
+        return `<img class="user-avatar" src="${safe}" alt="" loading="lazy" />`;
+      }
+      if (user && user.has_avatar && url && /^https?:\/\//i.test(url)) {
+        return `<img class="user-avatar" src="${escapeHtml(url)}" alt="" loading="lazy" />`;
+      }
+      return '<div class="user-avatar placeholder">Kein Bild</div>';
+    }
+
+    function userJsonForDebug(user) {
+      const copy = { ...user };
+      const au = copy.avatar_url;
+      if (au != null && String(au).length > 180) {
+        copy.avatar_url = `[ausgeblendet · ${String(au).length} Zeichen]`;
+      }
+      return JSON.stringify(copy, null, 2);
     }
 
     async function loadWelcomeTest() {
@@ -273,24 +305,77 @@ const API =
       await run();
     }
 
-    function escapeHtml(s) {
-      const d = document.createElement("div");
-      d.textContent = s;
-      return d.innerHTML;
-    }
-
     async function openUserDetail(id) {
       const el = document.getElementById("tab-users");
       el.innerHTML = "<p>Lade…</p>";
       try {
         const { user, stats } = await api("/users/" + id);
+        const role = user.role || "user";
+        const roleBadge =
+          role === "admin"
+            ? '<span class="badge admin">Admin</span>'
+            : '<span class="badge">User</span>';
+        const verBadge = user.is_verified
+          ? '<span class="badge ok">Verifiziert</span>'
+          : '<span class="badge">Nicht verifiziert</span>';
+        const suspBadge = user.suspended_at
+          ? `<span class="badge warn">Gesperrt · ${formatDateTime(user.suspended_at)}</span>`
+          : '<span class="badge">Aktiv</span>';
+        const addrLine = [
+          user.street,
+          [user.postal_code, user.city].filter(Boolean).join(" "),
+          user.country,
+        ]
+          .filter(Boolean)
+          .join("\n");
         el.innerHTML = `
           <div class="panel row-actions">
             <button type="button" class="secondary" id="user-back">← Liste</button>
           </div>
+          <div class="panel user-profile">
+            <div class="user-profile-header">
+              ${avatarMarkup(user)}
+              <div class="user-profile-title">
+                <h2>${escapeHtml(user.display_name || "(ohne Anzeigenamen)")}</h2>
+                <p class="mono-small" style="margin:0 0 0.25rem;">${escapeHtml(user.email || "")} · ID ${user.id}</p>
+                <div class="user-badges">${roleBadge}${verBadge}${suspBadge}</div>
+              </div>
+            </div>
+            <div class="user-profile-grid">
+              <div class="user-section">
+                <h3>Über mich</h3>
+                <div class="user-bio">${user.bio ? escapeHtml(user.bio) : '<span class="muted">—</span>'}</div>
+              </div>
+              <div class="user-section">
+                <h3>Kontakt &amp; Adresse</h3>
+                <div class="user-address">
+                  ${user.legal_name ? `<p><strong>Name:</strong> ${escapeHtml(user.legal_name)}</p>` : ""}
+                  ${user.phone ? `<p><strong>Telefon:</strong> ${escapeHtml(user.phone)}</p>` : ""}
+                  ${addrLine ? `<p><strong>Anschrift:</strong><br/>${escapeHtml(addrLine).replace(/\n/g, "<br/>")}</p>` : ""}
+                  ${user.address_extra ? `<p class="muted">${escapeHtml(user.address_extra)}</p>` : ""}
+                  ${!user.legal_name && !user.phone && !addrLine ? '<p class="muted">Keine Angaben</p>' : ""}
+                </div>
+              </div>
+              <div class="user-section">
+                <h3>Statistik</h3>
+                <p class="mono-small" style="margin:0;">
+                  Listings: <strong>${stats.active_listings}</strong> aktiv ·
+                  <strong>${stats.sold_listings}</strong> verkauft ·
+                  <strong>${stats.total_listings}</strong> gesamt
+                </p>
+                <p class="mono-small" style="margin:0.5rem 0 0;">
+                  Erstellt: ${formatDateTime(user.created_at)} ·
+                  Aktualisiert: ${formatDateTime(user.updated_at)}
+                </p>
+              </div>
+            </div>
+            <details class="user-raw-json">
+              <summary>Rohdaten (JSON, Avatar gekürzt)</summary>
+              <pre>${escapeHtml(userJsonForDebug(user))}</pre>
+            </details>
+          </div>
           <div class="panel">
-            <pre>${escapeHtml(JSON.stringify(user, null, 2))}</pre>
-            <p class="muted">Listings: aktiv ${stats.active_listings}, verkauft ${stats.sold_listings}, gesamt ${stats.total_listings}</p>
+            <h3 style="margin:0 0 0.75rem; font-size:0.95rem;">Moderation</h3>
             <label>Verifiziert
               <select id="uf-verified"><option value="true">ja</option><option value="false">nein</option></select>
             </label>

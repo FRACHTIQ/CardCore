@@ -111,6 +111,110 @@
     }
     pre { white-space: pre-wrap; word-break: break-word; font-size: 0.8rem; color: var(--muted); }
     .hidden { display: none !important; }
+    /* Nutzer-Detail (Admin) */
+    .user-profile { padding: 1.1rem 1.15rem; }
+    .user-profile-header {
+      display: flex;
+      gap: 1.1rem;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      margin-bottom: 0.25rem;
+    }
+    .user-avatar {
+      width: 96px;
+      height: 96px;
+      border-radius: 12px;
+      object-fit: cover;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      flex-shrink: 0;
+    }
+    .user-avatar.placeholder {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      font-size: 0.7rem;
+      text-align: center;
+      padding: 0.35rem;
+    }
+    .user-profile-title h2 {
+      margin: 0 0 0.35rem;
+      font-size: 1.2rem;
+      font-weight: 600;
+      line-height: 1.25;
+    }
+    .user-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      margin-top: 0.45rem;
+    }
+    .badge {
+      font-size: 0.72rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 6px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+    .badge.admin {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .badge.ok {
+      border-color: rgba(34, 197, 94, 0.5);
+      color: var(--ok);
+    }
+    .badge.warn {
+      border-color: rgba(239, 68, 68, 0.45);
+      color: #f87171;
+    }
+    .user-profile-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1rem 1.25rem;
+      margin-top: 1rem;
+    }
+    .user-section h3 {
+      margin: 0 0 0.4rem;
+      font-size: 0.72rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+    }
+    .user-bio {
+      white-space: pre-wrap;
+      line-height: 1.5;
+      font-size: 0.92rem;
+    }
+    .user-address p {
+      margin: 0 0 0.45rem;
+      font-size: 0.9rem;
+      line-height: 1.45;
+    }
+    .mono-small {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    details.user-raw-json {
+      margin-top: 1rem;
+      border-top: 1px solid var(--border);
+      padding-top: 0.75rem;
+    }
+    details.user-raw-json summary {
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 0.85rem;
+      user-select: none;
+    }
+    details.user-raw-json pre {
+      max-height: 14rem;
+      overflow: auto;
+      margin-top: 0.5rem;
+      font-size: 0.72rem;
+    }
   </style>
 </head>
 <body>
