@@ -7,6 +7,8 @@ alwaysApply: true
 
 **Projektpfad:** `C:\Users\CENSOR\Desktop\CardCore` (nicht `Desktop\card`).
 
+**Zugehörige App (Expo/React Native):** `C:\Users\CENSOR\Desktop\CardCore-Mobile\CardCore-App` — API-Integrationen für neue Backend-Features dort umsetzen, nicht hier.
+
 ## Ordner & Klonen
 
 - **Nur in diesem Projektordner** arbeiten (der geöffnete Workspace / geklontes `CardCore`-Repo).
