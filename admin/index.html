@@ -145,7 +145,13 @@
   </div>
 
   <script>
-    const API = "";
+    /** Optional: anderes API-Origin (z. B. Proxy) — vor diesem Script setzen:
+     *  <script>window.__CARDCORE_API_BASE__="https://api.example.com";</script>
+     */
+    const API =
+      typeof window !== "undefined" && window.__CARDCORE_API_BASE__ != null
+        ? String(window.__CARDCORE_API_BASE__).replace(/\/$/, "")
+        : "";
     const LS = "cardcore_admin_token";
 
     function token() { return localStorage.getItem(LS); }
@@ -767,11 +773,23 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, password }),
         });
-        const data = await r.json();
-        if (!r.ok) throw new Error(data.error || "Login fehlgeschlagen");
-        if (data.user.role !== "admin") {
+        const text = await r.text();
+        let data = {};
+        try {
+          data = text ? JSON.parse(text) : {};
+        } catch {
+          throw new Error(
+            text
+              ? "Unerwartete Antwort vom Server (kein JSON). Prüfe API-URL / Proxy."
+              : `Netzwerkfehler (HTTP ${r.status}).`
+          );
+        }
+        if (!r.ok) {
+          throw new Error(data.error || `Login fehlgeschlagen (HTTP ${r.status}).`);
+        }
+        if (!data.user || data.user.role !== "admin") {
           setToken(null);
-          throw new Error("Kein Admin-Konto.");
+          throw new Error("Kein Admin-Konto (Rolle muss „admin“ sein).");
         }
         setToken(data.token);
         showApp();
@@ -779,7 +797,10 @@
         renderTabs();
         showTab();
       } catch (e) {
-        err.textContent = e.message;
+        err.textContent =
+          e && e.message
+            ? e.message
+            : "Verbindung fehlgeschlagen. Netzwerk / CORS / falsche API-Adresse?";
         err.classList.remove("hidden");
       }
     };

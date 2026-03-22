@@ -19,7 +19,6 @@ async function dashboard(req, res, next) {
       listingsSold,
       supportOpen,
       supportTotal,
-      reportsOpen,
       revenue,
     ] = await Promise.all([
       query(`SELECT COUNT(*)::int AS c FROM app_user`),
@@ -33,9 +32,6 @@ async function dashboard(req, res, next) {
       ),
       query(`SELECT COUNT(*)::int AS c FROM support_ticket`),
       query(
-        `SELECT COUNT(*)::int AS c FROM user_report WHERE lower(status) = 'open'`
-      ),
-      query(
         `SELECT COALESCE(SUM(price_cents), 0)::bigint AS cents
          FROM listing WHERE status = 'SOLD'`
       ),
@@ -46,6 +42,21 @@ async function dashboard(req, res, next) {
        FROM listing WHERE status = 'ACTIVE'`
     );
 
+    /** Ohne Migration 013 (user_report) soll das Dashboard nicht komplett ausfallen. */
+    let reportsOpen = null;
+    try {
+      const rr = await query(
+        `SELECT COUNT(*)::int AS c FROM user_report WHERE lower(trim(status)) = 'open'`
+      );
+      reportsOpen = rr.rows[0].c;
+    } catch (e) {
+      if (e && (e.code === "42P01" || e.code === "42703")) {
+        reportsOpen = null;
+      } else {
+        throw e;
+      }
+    }
+
     res.json({
       users_total: users.rows[0].c,
       users_verified: usersVerified.rows[0].c,
@@ -55,7 +66,7 @@ async function dashboard(req, res, next) {
       revenue_sold_cents: Number(revenue.rows[0].c),
       support_open: supportOpen.rows[0].c,
       support_tickets_total: supportTotal.rows[0].c,
-      reports_open: reportsOpen.rows[0].c,
+      reports_open: reportsOpen,
     });
   } catch (err) {
     next(err);
@@ -530,6 +541,10 @@ async function listUserReports(req, res, next) {
       reports: listRes.rows,
     });
   } catch (err) {
+    if (err && err.code === "42P01") {
+      res.json({ total: 0, reports: [] });
+      return;
+    }
     next(err);
   }
 }

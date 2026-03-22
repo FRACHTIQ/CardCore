@@ -91,6 +91,9 @@ async function login(req, res, next) {
     if (user.suspended_at) {
       throw new HttpError(403, "Konto gesperrt.");
     }
+    if (!user.password_hash) {
+      throw new HttpError(401, "Ungültige Zugangsdaten.");
+    }
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) {
       throw new HttpError(401, "Ungültige Zugangsdaten.");
