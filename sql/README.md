@@ -13,5 +13,6 @@ Reihenfolge in PostgreSQL (z. B. Railway):
 8. `008_marketplace_extensions.sql` – Angebote, Deals, … – falls vorhanden
 9. `009_welcome_system_dm.sql` / `010_…` – Willkommens-DM – falls vorhanden
 10. **`011_message_image.sql`** – `message.image_url` für Bilder in Chats (Data-URL)
+11. **`012_profile_presence_social.sql`** – `last_seen_at`, `social_links`, `show_last_seen` auf `app_user`
 
 **Hinweis:** `002` ist nur nötig, wenn die Datenbank bereits mit `001` ohne die neuen Spalten angelegt wurde. Bei einem **frischen** Setup aus `001_initial.sql` (inkl. `legal_name`, …) kann `002` übersprungen werden.
