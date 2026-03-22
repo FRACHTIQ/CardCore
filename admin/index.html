@@ -139,6 +139,7 @@
       <section id="tab-revenue" class="hidden"></section>
       <section id="tab-support" class="hidden"></section>
       <section id="tab-app" class="hidden"></section>
+      <section id="tab-welcome" class="hidden"></section>
     </main>
   </div>
 
@@ -176,6 +177,7 @@
       { id: "listings", label: "Karten" },
       { id: "revenue", label: "Umsatz" },
       { id: "support", label: "Support" },
+      { id: "welcome", label: "Willkommen" },
       { id: "app", label: "App & Wartung" },
     ];
     let activeTab = "dashboard";
@@ -191,7 +193,7 @@
     }
 
     function showTab() {
-      ["dashboard", "users", "listings", "revenue", "support", "app"].forEach(id => {
+      ["dashboard", "users", "listings", "revenue", "support", "welcome", "app"].forEach(id => {
         const sec = document.getElementById("tab-" + id);
         if (sec) sec.classList.toggle("hidden", id !== activeTab);
       });
@@ -200,6 +202,7 @@
       if (activeTab === "listings") loadListings();
       if (activeTab === "revenue") loadRevenue();
       if (activeTab === "support") loadSupport();
+      if (activeTab === "welcome") loadWelcomeTest();
       if (activeTab === "app") loadAppSettings();
     }
 
@@ -212,6 +215,97 @@
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/"/g, "&quot;");
+    }
+
+    async function loadWelcomeTest() {
+      const el = document.getElementById("tab-welcome");
+      el.innerHTML = "<p class=\"muted\">Lade Nutzer…</p>";
+      const esc = (s) => {
+        const d = document.createElement("div");
+        d.textContent = s ?? "";
+        return d.innerHTML;
+      };
+      try {
+        const data = await api("/users?limit=200");
+        const opts = data.users.map((u) =>
+          `<option value="${u.id}">#${u.id} · ${esc(u.email)} · ${esc(u.display_name || "")}</option>`
+        ).join("");
+        el.innerHTML = `
+          <div class="panel">
+            <h2 style="margin:0 0 0.5rem; font-size:1rem;">Willkommens-Testnachricht</h2>
+            <p class="muted" style="margin:0 0 0.75rem; font-size:0.85rem;">
+              Sendet die gleiche automatische Nachricht wie bei der Registrierung (erscheint in <strong>Nachrichten</strong> der App).
+              Funktioniert nicht, wenn der gewählte Nutzer derselbe wie der Absender ist (Standard: User-ID 1).
+            </p>
+            <label>Suche (E-Mail / Name)<input type="search" id="welcome-search" placeholder="Filter…" /></label>
+            <div class="row-actions" style="margin-top:0.5rem">
+              <button type="button" class="secondary" id="welcome-refresh">Liste aktualisieren</button>
+            </div>
+            <label style="margin-top:0.75rem">Nutzer wählen
+              <select id="welcome-user" size="10" style="height:auto; min-height:14rem;">${opts}</select>
+            </label>
+            <p class="muted" style="font-size:0.85rem; margin:0.5rem 0 0;">
+              Alternativ nur User-ID (überschreibt die Auswahl oben):
+              <input type="number" id="welcome-user-id" min="1" placeholder="z. B. 4" style="width:7rem; margin:0 0 0 0.35rem; display:inline-block;" />
+            </p>
+            <button type="button" id="welcome-send">Testnachricht senden</button>
+            <p id="welcome-msg" style="margin-top:0.75rem;"></p>
+            <pre id="welcome-out" class="panel" style="margin-top:0.5rem; display:none; max-height:12rem; overflow:auto;"></pre>
+          </div>`;
+        document.getElementById("welcome-refresh").onclick = async () => {
+          const q = document.getElementById("welcome-search").value.trim();
+          const msg = document.getElementById("welcome-msg");
+          try {
+            const path = "/users?limit=200" + (q ? "&search=" + encodeURIComponent(q) : "");
+            const d = await api(path);
+            const sel = document.getElementById("welcome-user");
+            sel.innerHTML = d.users.map((u) =>
+              `<option value="${u.id}">#${u.id} · ${esc(u.email)} · ${esc(u.display_name || "")}</option>`
+            ).join("");
+            msg.textContent = d.total + " Treffer geladen.";
+            msg.style.color = "var(--muted)";
+          } catch (e) {
+            msg.textContent = e.message;
+            msg.style.color = "var(--danger)";
+          }
+        };
+        document.getElementById("welcome-search").addEventListener("keydown", (ev) => {
+          if (ev.key === "Enter") document.getElementById("welcome-refresh").click();
+        });
+        document.getElementById("welcome-send").onclick = async () => {
+          const msgEl = document.getElementById("welcome-msg");
+          const outEl = document.getElementById("welcome-out");
+          msgEl.textContent = "";
+          outEl.style.display = "none";
+          let uid = parseInt(document.getElementById("welcome-user-id").value, 10);
+          if (!Number.isInteger(uid) || uid < 1) {
+            uid = parseInt(document.getElementById("welcome-user").value, 10);
+          }
+          if (!Number.isInteger(uid) || uid < 1) {
+            msgEl.textContent = "Bitte Nutzer wählen oder gültige User-ID eingeben.";
+            msgEl.style.color = "var(--danger)";
+            return;
+          }
+          try {
+            const res = await api("/welcome-dm", {
+              method: "POST",
+              body: JSON.stringify({ user_id: uid }),
+            });
+            outEl.textContent = JSON.stringify(res, null, 2);
+            outEl.style.display = "block";
+            const ok = res.welcome_dm && res.welcome_dm.sent;
+            msgEl.textContent = ok
+              ? "Gesendet. Der Nutzer sollte die Konversation in der App unter Nachrichten sehen."
+              : "Nicht gesendet: " + (res.welcome_dm && res.welcome_dm.reason ? res.welcome_dm.reason : "siehe JSON unten");
+            msgEl.style.color = ok ? "var(--ok)" : "var(--danger)";
+          } catch (e) {
+            msgEl.textContent = e.message;
+            msgEl.style.color = "var(--danger)";
+          }
+        };
+      } catch (e) {
+        el.innerHTML = "<p class=\"error\">" + esc(e.message) + "</p>";
+      }
     }
 
     async function loadAppSettings() {

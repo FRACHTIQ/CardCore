@@ -76,6 +76,8 @@ Server starten, im Browser: **`http://localhost:3000/admin/`** (oder eure Railwa
 
 Anmeldung mit einem **Admin-Konto** (normales Login über `/api/auth/login`); Nutzer ohne `role = admin` werden im UI abgewiesen.
 
+**Tab „Willkommen“:** Nutzer auswählen (oder User-ID eintragen) und „Testnachricht senden“ – ruft dieselbe Logik wie `POST /api/admin/welcome-dm` auf (Willkommens-DM in der App unter Nachrichten).
+
 ## Login & Sperre
 
 - Login liefert `user.role` (`user` | `admin`).
