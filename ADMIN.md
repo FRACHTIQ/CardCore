@@ -48,6 +48,7 @@ UPDATE app_user SET role = 'admin' WHERE email = 'deine@email.de';
 | PATCH | `/support/tickets/:id` | `status` |
 | GET | `/app-settings` | Mindest-Version, Wartung (lesen) |
 | PATCH | `/app-settings` | `min_native_version`, `maintenance_enabled`, `maintenance_message` |
+| POST | `/welcome-dm` | Willkommens-DM nachträglich senden, Body: `{ "user_id": 4 }` (nur Server-DB, z. B. Railway) |
 
 Öffentlich (ohne Login): **`GET /api/app/status`** – liefert `min_native_version` und `maintenance` für die Mobile-App (Startprüfung).
 

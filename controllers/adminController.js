@@ -1,5 +1,6 @@
 const { query, withTransaction } = require("../db");
 const { HttpError } = require("../utils/httpError");
+const { sendWelcomeDmToNewUser } = require("../services/welcomeDm");
 
 const BODY_MAX = 8000;
 
@@ -473,6 +474,20 @@ async function patchSupportTicket(req, res, next) {
   }
 }
 
+/** Willkommens-DM für einen User nachträglich auslösen (läuft auf dem Server, z. B. Railway). */
+async function postWelcomeDm(req, res, next) {
+  try {
+    const userId = Number(req.body.user_id);
+    if (!Number.isInteger(userId) || userId < 1) {
+      throw new HttpError(400, "user_id erforderlich (positive Ganzzahl).");
+    }
+    const welcome_dm = await sendWelcomeDmToNewUser(userId);
+    res.json({ welcome_dm });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   dashboard,
   revenueDetail,
@@ -486,4 +501,5 @@ module.exports = {
   getSupportTicket,
   postSupportReply,
   patchSupportTicket,
+  postWelcomeDm,
 };

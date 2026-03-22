@@ -27,4 +27,6 @@ router.get("/support/tickets/:id", admin.getSupportTicket);
 router.post("/support/tickets/:id/messages", admin.postSupportReply);
 router.patch("/support/tickets/:id", admin.patchSupportTicket);
 
+router.post("/welcome-dm", admin.postWelcomeDm);
+
 module.exports = router;
