@@ -1,5 +1,6 @@
 const { query, withTransaction } = require("../db");
 const { HttpError } = require("../utils/httpError");
+const { assertNotBlocked } = require("../services/userBlocking");
 
 /** Wie Profilbild: Data-URL, Obergrenze gegen Missbrauch */
 const MAX_MESSAGE_IMAGE_DATA_URL = 400000;
@@ -39,6 +40,10 @@ async function assertConversationMember(conversationId, userId) {
   return row;
 }
 
+function otherParticipant(convRow, userId) {
+  return convRow.buyer_id === userId ? convRow.seller_id : convRow.buyer_id;
+}
+
 async function listMine(req, res, next) {
   try {
     const uid = req.userId;
@@ -73,7 +78,14 @@ async function listMine(req, res, next) {
        JOIN app_user ou ON ou.id = (
          CASE WHEN c.buyer_id = $1 THEN c.seller_id ELSE c.buyer_id END
        )
-       WHERE c.buyer_id = $1 OR c.seller_id = $1
+       WHERE (c.buyer_id = $1 OR c.seller_id = $1)
+       AND NOT EXISTS (
+         SELECT 1 FROM user_block ub
+         WHERE (
+           (ub.blocker_id = $1 AND ub.blocked_id = (CASE WHEN c.buyer_id = $1 THEN c.seller_id ELSE c.buyer_id END))
+           OR (ub.blocker_id = (CASE WHEN c.buyer_id = $1 THEN c.seller_id ELSE c.buyer_id END) AND ub.blocked_id = $1)
+         )
+       )
        ORDER BY COALESCE(c.last_message_at, c.updated_at) DESC`,
       [uid]
     );
@@ -105,6 +117,8 @@ async function openOrCreate(req, res, next) {
       throw new HttpError(400, "Zu eigenem Listing kann keine Konversation gestartet werden.");
     }
 
+    await assertNotBlocked(buyerId, sellerId);
+
     const result = await query(
       `INSERT INTO conversation (listing_id, buyer_id, seller_id)
        VALUES ($1, $2, $3)
@@ -127,7 +141,8 @@ async function getMessages(req, res, next) {
       throw new HttpError(400, "Ungültige ID.");
     }
 
-    await assertConversationMember(conversationId, req.userId);
+    const convRow = await assertConversationMember(conversationId, req.userId);
+    await assertNotBlocked(req.userId, otherParticipant(convRow, req.userId));
 
     const since = req.query.since ? String(req.query.since) : null;
     const limit = Math.min(
@@ -174,7 +189,8 @@ async function postMessage(req, res, next) {
 
     const { body, image_url: imageUrl } = parseMessagePayload(req);
 
-    await assertConversationMember(conversationId, req.userId);
+    const convRow = await assertConversationMember(conversationId, req.userId);
+    await assertNotBlocked(req.userId, otherParticipant(convRow, req.userId));
 
     const inserted = await withTransaction(async (client) => {
       const msgRes = await client.query(
@@ -198,9 +214,51 @@ async function postMessage(req, res, next) {
   }
 }
 
+async function deleteMessage(req, res, next) {
+  try {
+    const conversationId = Number(req.params.id);
+    const messageId = Number(req.params.messageId);
+    if (!Number.isInteger(conversationId) || conversationId < 1) {
+      throw new HttpError(400, "Ungültige Konversations-ID.");
+    }
+    if (!Number.isInteger(messageId) || messageId < 1) {
+      throw new HttpError(400, "Ungültige Nachrichten-ID.");
+    }
+
+    const convRow = await assertConversationMember(conversationId, req.userId);
+    await assertNotBlocked(req.userId, otherParticipant(convRow, req.userId));
+
+    await withTransaction(async (client) => {
+      const del = await client.query(
+        `DELETE FROM message
+         WHERE id = $1 AND conversation_id = $2 AND sender_id = $3
+         RETURNING id`,
+        [messageId, conversationId, req.userId]
+      );
+      if (!del.rows[0]) {
+        throw new HttpError(404, "Nachricht nicht gefunden.");
+      }
+      await client.query(
+        `UPDATE conversation
+         SET last_message_at = (
+           SELECT MAX(created_at) FROM message WHERE conversation_id = $1
+         ),
+         updated_at = NOW()
+         WHERE id = $1`,
+        [conversationId]
+      );
+    });
+
+    res.status(204).send();
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   listMine,
   openOrCreate,
   getMessages,
   postMessage,
+  deleteMessage,
 };

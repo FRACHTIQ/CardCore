@@ -11,5 +11,9 @@ router.get("/", conversationController.listMine);
 router.post("/", verifiedRequired, conversationController.openOrCreate);
 router.get("/:id/messages", conversationController.getMessages);
 router.post("/:id/messages", conversationController.postMessage);
+router.delete(
+  "/:id/messages/:messageId",
+  conversationController.deleteMessage
+);
 
 module.exports = router;

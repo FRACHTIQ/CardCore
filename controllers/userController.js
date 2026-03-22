@@ -258,11 +258,125 @@ async function patchMe(req, res, next) {
   }
 }
 
+async function listBlockedUsers(req, res, next) {
+  try {
+    const result = await query(
+      `SELECT ub.blocked_id AS id, u.display_name
+       FROM user_block ub
+       JOIN app_user u ON u.id = ub.blocked_id
+       WHERE ub.blocker_id = $1
+       ORDER BY ub.created_at DESC`,
+      [req.userId]
+    );
+    res.json({ blocked: result.rows });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function blockUser(req, res, next) {
+  try {
+    const targetId = Number(req.params.id);
+    if (!Number.isInteger(targetId) || targetId < 1) {
+      throw new HttpError(400, "Ungültige ID.");
+    }
+    if (targetId === req.userId) {
+      throw new HttpError(400, "Du kannst dich nicht selbst blockieren.");
+    }
+    const exists = await query(`SELECT 1 FROM app_user WHERE id = $1`, [
+      targetId,
+    ]);
+    if (!exists.rows[0]) {
+      throw new HttpError(404, "Nutzer nicht gefunden.");
+    }
+    await query(
+      `INSERT INTO user_block (blocker_id, blocked_id) VALUES ($1, $2)
+       ON CONFLICT DO NOTHING`,
+      [req.userId, targetId]
+    );
+    res.status(204).send();
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function unblockUser(req, res, next) {
+  try {
+    const targetId = Number(req.params.id);
+    if (!Number.isInteger(targetId) || targetId < 1) {
+      throw new HttpError(400, "Ungültige ID.");
+    }
+    await query(
+      `DELETE FROM user_block WHERE blocker_id = $1 AND blocked_id = $2`,
+      [req.userId, targetId]
+    );
+    res.status(204).send();
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function reportUser(req, res, next) {
+  try {
+    const targetId = Number(req.params.id);
+    if (!Number.isInteger(targetId) || targetId < 1) {
+      throw new HttpError(400, "Ungültige ID.");
+    }
+    if (targetId === req.userId) {
+      throw new HttpError(400, "Ungültige Meldung.");
+    }
+    const exists = await query(`SELECT 1 FROM app_user WHERE id = $1`, [
+      targetId,
+    ]);
+    if (!exists.rows[0]) {
+      throw new HttpError(404, "Nutzer nicht gefunden.");
+    }
+    const reason = clip(req.body.reason, 200);
+    const details =
+      req.body.details !== undefined ? clip(req.body.details, 4000) : null;
+    if (!reason) {
+      throw new HttpError(400, "Grund erforderlich.");
+    }
+    await query(
+      `INSERT INTO user_report (reporter_id, reported_id, reason, details)
+       VALUES ($1, $2, $3, $4)`,
+      [req.userId, targetId, reason, details || null]
+    );
+    res.status(201).json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function getPublicProfile(req, res, next) {
   try {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id < 1) {
       throw new HttpError(400, "Ungültige ID.");
+    }
+
+    const viewerId =
+      req.userId != null && Number.isInteger(req.userId) && req.userId >= 1
+        ? req.userId
+        : null;
+
+    if (viewerId && viewerId !== id) {
+      const theyBlockedMe = await query(
+        `SELECT 1 FROM user_block WHERE blocker_id = $1 AND blocked_id = $2`,
+        [id, viewerId]
+      );
+      if (theyBlockedMe.rows.length > 0) {
+        throw new HttpError(404, "Profil nicht gefunden.");
+      }
+    }
+
+    let viewerHasBlocked = false;
+    if (viewerId && viewerId !== id) {
+      const iBlocked = await query(
+        `SELECT 1 FROM user_block WHERE blocker_id = $1 AND blocked_id = $2`,
+        [viewerId, id]
+      );
+      viewerHasBlocked = iBlocked.rows.length > 0;
     }
 
     const result = await query(
@@ -313,6 +427,7 @@ async function getPublicProfile(req, res, next) {
         rating_count: row.rating_count,
         active_listings_count: row.active_listings_count,
         sold_count: row.sold_count,
+        viewer_has_blocked: viewerHasBlocked,
       },
     });
   } catch (err) {
@@ -341,4 +456,8 @@ module.exports = {
   getPublicProfile,
   deleteMe,
   heartbeatPresence,
+  listBlockedUsers,
+  blockUser,
+  unblockUser,
+  reportUser,
 };
