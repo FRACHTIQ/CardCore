@@ -9,7 +9,7 @@ function errorHandler(err, req, res, next) {
     console.error(err);
     return res.status(500).json({
       error:
-        "Datenbankschema nicht aktuell (fehlende Spalte). Bitte in PostgreSQL die Migrationen ausführen, z. B. sql/004_avatar.sql und sql/005_admin.sql (Reihenfolge siehe sql/README.md).",
+        "Datenbankschema nicht aktuell (fehlende Spalte). Bitte in PostgreSQL die Migrationen ausführen, z. B. sql/004_avatar.sql, sql/005_admin.sql, sql/011_message_image.sql (Reihenfolge siehe sql/README.md).",
     });
   }
   if (err.code === "42P01") {

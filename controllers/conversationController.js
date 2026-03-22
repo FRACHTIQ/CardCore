@@ -1,6 +1,29 @@
 const { query, withTransaction } = require("../db");
 const { HttpError } = require("../utils/httpError");
 
+/** Wie Profilbild: Data-URL, Obergrenze gegen Missbrauch */
+const MAX_MESSAGE_IMAGE_DATA_URL = 400000;
+
+function parseMessagePayload(req) {
+  const body = String(req.body.body ?? "").trim();
+  const rawImg = req.body.image_url;
+  const imageUrl =
+    rawImg !== undefined && rawImg !== null && String(rawImg).trim() !== ""
+      ? String(rawImg).trim().slice(0, MAX_MESSAGE_IMAGE_DATA_URL)
+      : null;
+
+  if (!imageUrl && body.length === 0) {
+    throw new HttpError(400, "Nachricht darf nicht leer sein.");
+  }
+  if (body.length > 8000) {
+    throw new HttpError(400, "Nachricht zu lang.");
+  }
+  if (imageUrl && !imageUrl.startsWith("data:image/")) {
+    throw new HttpError(400, "Bild muss eine gültige Bild-Data-URL sein.");
+  }
+  return { body: body || "", image_url: imageUrl };
+}
+
 async function assertConversationMember(conversationId, userId) {
   const result = await query(
     `SELECT id, listing_id, buyer_id, seller_id FROM conversation WHERE id = $1`,
@@ -38,7 +61,11 @@ async function listMine(req, res, next) {
          (SELECT m.sender_id FROM message m
             WHERE m.conversation_id = c.id
             ORDER BY m.created_at DESC LIMIT 1) AS last_message_sender_id,
-         (SELECT LEFT(m.body, 140) FROM message m
+         (SELECT CASE
+            WHEN m.image_url IS NOT NULL AND LENGTH(TRIM(COALESCE(m.body, ''))) = 0 THEN '📷 Foto'
+            ELSE LEFT(TRIM(COALESCE(m.body, '')), 140)
+          END
+          FROM message m
             WHERE m.conversation_id = c.id
             ORDER BY m.created_at DESC LIMIT 1) AS last_message_preview
        FROM conversation c
@@ -112,7 +139,7 @@ async function getMessages(req, res, next) {
     let sql;
     if (since) {
       sql = `
-        SELECT id, conversation_id, sender_id, body, created_at
+        SELECT id, conversation_id, sender_id, body, image_url, created_at
         FROM message
         WHERE conversation_id = $1 AND created_at > $2::timestamptz
         ORDER BY created_at ASC
@@ -121,7 +148,7 @@ async function getMessages(req, res, next) {
       sqlParams = [conversationId, since, limit];
     } else {
       sql = `
-        SELECT id, conversation_id, sender_id, body, created_at
+        SELECT id, conversation_id, sender_id, body, image_url, created_at
         FROM message
         WHERE conversation_id = $1
         ORDER BY created_at DESC
@@ -145,22 +172,16 @@ async function postMessage(req, res, next) {
       throw new HttpError(400, "Ungültige ID.");
     }
 
-    const body = String(req.body.body || "").trim();
-    if (!body) {
-      throw new HttpError(400, "Nachricht darf nicht leer sein.");
-    }
-    if (body.length > 8000) {
-      throw new HttpError(400, "Nachricht zu lang.");
-    }
+    const { body, image_url: imageUrl } = parseMessagePayload(req);
 
     await assertConversationMember(conversationId, req.userId);
 
     const inserted = await withTransaction(async (client) => {
       const msgRes = await client.query(
-        `INSERT INTO message (conversation_id, sender_id, body)
-         VALUES ($1, $2, $3)
-         RETURNING id, conversation_id, sender_id, body, created_at`,
-        [conversationId, req.userId, body]
+        `INSERT INTO message (conversation_id, sender_id, body, image_url)
+         VALUES ($1, $2, $3, $4)
+         RETURNING id, conversation_id, sender_id, body, image_url, created_at`,
+        [conversationId, req.userId, body, imageUrl]
       );
       await client.query(
         `UPDATE conversation

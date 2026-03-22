@@ -1,8 +1,9 @@
 /**
  * Claude API – vorbereitet für spätere KI-Features (Listing-Texte, Support, Moderation).
- * Ohne ANTHROPIC_API_KEY: Aufrufe schlagen mit klarem Fehler fehl.
+ * Ohne ANTHROPIC_API_KEY: in Produktion HTTP 503; lokal weiter Demo-Daten (mock).
  */
 const Anthropic = require("@anthropic-ai/sdk");
+const { HttpError } = require("../utils/httpError");
 
 let client = null;
 
@@ -111,6 +112,12 @@ async function analyzeCardImages(p) {
 
   const c = getClient();
   if (!c) {
+    if (process.env.NODE_ENV === "production") {
+      throw new HttpError(
+        503,
+        "KI-Analyse ist nicht konfiguriert (ANTHROPIC_API_KEY fehlt)."
+      );
+    }
     return mockAnalyzeCard();
   }
 

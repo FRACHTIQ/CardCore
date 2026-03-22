@@ -2,6 +2,8 @@ require("dotenv").config();
 const path = require("path");
 const express = require("express");
 const cors = require("cors");
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
 
 const { errorHandler } = require("./middleware/errorHandler");
 const appConfigController = require("./controllers/appConfigController");
@@ -22,13 +24,47 @@ const dealsRoutes = require("./routes/deals");
 const app = express();
 const port = Number(process.env.PORT) || 3000;
 
+const corsOriginsRaw = process.env.CORS_ORIGINS;
+const corsOrigins =
+  corsOriginsRaw && String(corsOriginsRaw).trim().length > 0
+    ? String(corsOriginsRaw)
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : null;
+
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  })
+);
 app.use(
   cors({
-    origin: true,
+    origin:
+      corsOrigins && corsOrigins.length > 0 ? corsOrigins : true,
     credentials: true,
   })
 );
 app.use(express.json({ limit: "15mb" }));
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 80,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Zu viele Anfragen. Bitte später erneut versuchen." },
+});
+
+const aiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Zu viele KI-Anfragen. Bitte kurz warten." },
+});
+
+app.use("/api/auth", authLimiter);
+app.use("/api/ai", aiLimiter);
 
 app.get("/health", (req, res) => {
   res.json({
