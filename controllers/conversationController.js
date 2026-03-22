@@ -1,6 +1,8 @@
 const { query, withTransaction } = require("../db");
 const { HttpError } = require("../utils/httpError");
 const { assertNotBlocked } = require("../services/userBlocking");
+const { recordSellerResponseHours } = require("../services/responseMetrics");
+const { fireNotifyNewMessage } = require("../services/expoPush");
 
 /** Wie Profilbild: Data-URL, Obergrenze gegen Missbrauch */
 const MAX_MESSAGE_IMAGE_DATA_URL = 400000;
@@ -206,7 +208,25 @@ async function postMessage(req, res, next) {
          WHERE id = $1`,
         [conversationId]
       );
-      return msgRes.rows[0];
+      const row = msgRes.rows[0];
+      await recordSellerResponseHours(client, {
+        conversationId,
+        newMessageId: row.id,
+      });
+      return row;
+    });
+
+    const recipient = otherParticipant(convRow, req.userId);
+    const preview =
+      (inserted.body || "").trim().slice(0, 120) ||
+      (inserted.image_url ? "📷 Bild" : "");
+    fireNotifyNewMessage(recipient, {
+      title: "Neue Nachricht",
+      body: preview,
+      data: {
+        type: "message",
+        conversation_id: conversationId,
+      },
     });
 
     res.status(201).json({ message: inserted });

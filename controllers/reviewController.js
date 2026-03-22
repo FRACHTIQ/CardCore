@@ -75,4 +75,38 @@ async function create(req, res, next) {
   }
 }
 
-module.exports = { create };
+/** Öffentlich: letzte Bewertungen eines Verkäufers (Profil-Snippets). */
+async function listBySeller(req, res, next) {
+  try {
+    const sellerId = Number(req.params.sellerId);
+    let limit = Number.parseInt(String(req.query.limit || "3"), 10);
+    if (!Number.isFinite(limit) || limit < 1) limit = 3;
+    if (limit > 10) limit = 10;
+
+    if (!Number.isInteger(sellerId) || sellerId < 1) {
+      throw new HttpError(400, "Ungültige sellerId.");
+    }
+
+    const exists = await query(`SELECT 1 FROM app_user WHERE id = $1`, [
+      sellerId,
+    ]);
+    if (exists.rows.length === 0) {
+      throw new HttpError(404, "Nutzer nicht gefunden.");
+    }
+
+    const result = await query(
+      `SELECT r.rating, r.comment, r.created_at
+       FROM review r
+       WHERE r.seller_id = $1
+       ORDER BY r.created_at DESC
+       LIMIT $2`,
+      [sellerId, limit]
+    );
+
+    res.json({ reviews: result.rows });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { create, listBySeller };

@@ -5,6 +5,7 @@ const { verifiedRequired } = require("../middleware/verified");
 
 const router = express.Router();
 
+router.get("/seller/:sellerId", reviewController.listBySeller);
 router.post("/", authRequired, verifiedRequired, reviewController.create);
 
 module.exports = router;

@@ -91,6 +91,8 @@ const ME_SELECT = `SELECT id, email, display_name, bio,
   last_seen_at,
   social_links,
   show_last_seen,
+  avg_response_hours,
+  response_metric_samples,
   created_at, updated_at
   FROM app_user WHERE id = $1`;
 
@@ -102,6 +104,8 @@ const ME_RETURNING = `id, email, display_name, bio,
   last_seen_at,
   social_links,
   show_last_seen,
+  avg_response_hours,
+  response_metric_samples,
   created_at, updated_at`;
 
 async function getMe(req, res, next) {
@@ -400,7 +404,9 @@ async function getPublicProfile(req, res, next) {
          COALESCE((SELECT COUNT(*)::int FROM review r WHERE r.seller_id = u.id), 0) AS rating_count,
          COALESCE((SELECT COUNT(*)::int FROM listing l WHERE l.seller_id = u.id AND l.status = 'ACTIVE'), 0) AS active_listings_count,
          COALESCE((SELECT COUNT(*)::int FROM listing l WHERE l.seller_id = u.id AND l.status = 'SOLD'), 0) AS sold_count,
-         (u.role = 'admin') AS is_admin
+         (u.role = 'admin') AS is_admin,
+         u.avg_response_hours,
+         u.response_metric_samples
        FROM app_user u
        WHERE u.id = $1`,
       [id]
@@ -430,6 +436,9 @@ async function getPublicProfile(req, res, next) {
         sold_count: row.sold_count,
         viewer_has_blocked: viewerHasBlocked,
         is_admin: Boolean(row.is_admin),
+        avg_response_hours:
+          row.avg_response_hours != null ? Number(row.avg_response_hours) : null,
+        response_metric_samples: Number(row.response_metric_samples || 0),
       },
     });
   } catch (err) {

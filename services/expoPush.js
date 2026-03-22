@@ -320,6 +320,98 @@ function fireAndNotifyNewListing(listing, opts) {
 
 
 
+function isNewMessagePushEnabled() {
+
+  return process.env.PUSH_NEW_MESSAGE_ENABLED !== "0";
+
+}
+
+
+
+async function notifyNewMessage(recipientUserId, { title, body, data = {} }) {
+
+  if (!isNewMessagePushEnabled()) {
+
+    return;
+
+  }
+
+  const uid = Number(recipientUserId);
+
+  if (!Number.isInteger(uid) || uid < 1) {
+
+    return;
+
+  }
+
+  let rows;
+
+  try {
+
+    const res = await query(
+
+      `SELECT expo_push_token FROM user_push_token WHERE user_id = $1`,
+
+      [uid]
+
+    );
+
+    rows = res.rows;
+
+  } catch (e) {
+
+    console.error("[push] notifyNewMessage query:", e.message);
+
+    return;
+
+  }
+
+  const tokens = rows.map((r) => r.expo_push_token).filter(Boolean);
+
+  if (tokens.length === 0) {
+
+    return;
+
+  }
+
+  const messages = tokens.map((to) => ({
+
+    to,
+
+    sound: "default",
+
+    title: title || "Neue Nachricht",
+
+    body: body || "",
+
+    data: { ...data },
+
+    channelId: "default",
+
+  }));
+
+  await sendExpoNotifications(messages);
+
+}
+
+
+
+function fireNotifyNewMessage(recipientUserId, payload) {
+
+  setImmediate(() => {
+
+    notifyNewMessage(recipientUserId, payload).catch((e) => {
+
+      console.error("[push] notifyNewMessage:", e.message);
+
+    });
+
+  });
+
+}
+
+
+
 module.exports = {
 
   formatEur,
@@ -333,6 +425,10 @@ module.exports = {
   fireNotifyUserIds,
 
   sendExpoNotifications,
+
+  notifyNewMessage,
+
+  fireNotifyNewMessage,
 
 };
 

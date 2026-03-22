@@ -5,6 +5,8 @@ alwaysApply: true
 
 # CardCore / Backend – Arbeitsweise
 
+**Projektpfad:** `C:\Users\CENSOR\Desktop\CardCore` (nicht `Desktop\card`).
+
 ## Ordner & Klonen
 
 - **Nur in diesem Projektordner** arbeiten (der geöffnete Workspace / geklontes `CardCore`-Repo).
