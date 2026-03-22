@@ -44,10 +44,12 @@ async function register(req, res, next) {
     );
     const user = result.rows[0];
     const token = signToken(user.id);
+    let welcomeDm = { sent: false, reason: "error" };
     try {
-      await sendWelcomeDmToNewUser(user.id);
+      welcomeDm = await sendWelcomeDmToNewUser(user.id);
     } catch (e) {
       console.error("[auth] welcome DM:", e && e.stack ? e.stack : e);
+      welcomeDm = { sent: false, reason: "exception" };
     }
     res.status(201).json({
       user: {
@@ -57,6 +59,7 @@ async function register(req, res, next) {
         role: user.role || "user",
       },
       token,
+      welcome_dm: welcomeDm,
     });
   } catch (err) {
     if (err.code === "23505") {

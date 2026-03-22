@@ -1,7 +1,9 @@
 const { withTransaction } = require("../db");
 
-/** Absender der Willkommensnachricht (Inhaber-Account). */
-const WELCOME_SENDER_USER_ID = 1;
+function welcomeSenderUserId() {
+  const n = Number(process.env.WELCOME_SENDER_USER_ID);
+  return Number.isInteger(n) && n >= 1 ? n : 1;
+}
 
 /** Einheitlicher Text für die automatische erste Nachricht (Betreff + Fließtext). */
 const WELCOME_MESSAGE_BODY = `Betreff: Tach bei VURAX! 🃏
@@ -25,28 +27,55 @@ Beste Grüße,
 Deine VURAX-Inhaber`;
 
 /**
- * Liefert listing_id des Willkommens-Ankers; legt ihn bei Bedarf an (falls User id 1 existiert).
- * Hintergrund: SQL 009 fügt nur ein, wenn beim ersten Ausführen schon ein User mit id=1 existierte — sonst blieb die DB leer.
+ * Liefert listing_id des Willkommens-Ankers; legt ihn bei Bedarf an.
+ * Korrigiert seller_id am Anker auf WELCOME_SENDER_USER_ID, falls ältere Migration abweicht.
  */
-async function ensureWelcomeAnchorListing(client) {
-  const found = await client.query(
-    `SELECT l.id AS listing_id
+async function ensureWelcomeAnchorListing(client, senderId) {
+  const anyAnchor = await client.query(
+    `SELECT l.id AS listing_id, l.seller_id
      FROM listing l
-     WHERE l.is_welcome_anchor = TRUE AND l.seller_id = $1
-     LIMIT 1`,
-    [WELCOME_SENDER_USER_ID]
+     WHERE l.is_welcome_anchor = TRUE
+     LIMIT 1`
   );
-  if (found.rows[0]) {
-    return Number(found.rows[0].listing_id);
+  if (anyAnchor.rows[0]) {
+    const lid = Number(anyAnchor.rows[0].listing_id);
+    const sid = Number(anyAnchor.rows[0].seller_id);
+    if (sid !== senderId) {
+      const owner = await client.query(`SELECT 1 FROM app_user WHERE id = $1`, [
+        senderId,
+      ]);
+      if (owner.rows.length === 0) {
+        console.warn(
+          "[welcomeDm] Anker hat seller_id",
+          sid,
+          "— Ziel-User",
+          senderId,
+          "fehlt in app_user."
+        );
+        return null;
+      }
+      await client.query(`UPDATE listing SET seller_id = $1 WHERE id = $2`, [
+        senderId,
+        lid,
+      ]);
+      console.info(
+        "[welcomeDm] Anker seller_id angepasst: listing",
+        lid,
+        "→",
+        senderId
+      );
+    }
+    return lid;
   }
 
-  const owner = await client.query(
-    `SELECT 1 FROM app_user WHERE id = $1`,
-    [WELCOME_SENDER_USER_ID]
-  );
+  const owner = await client.query(`SELECT 1 FROM app_user WHERE id = $1`, [
+    senderId,
+  ]);
   if (owner.rows.length === 0) {
     console.warn(
-      "[welcomeDm] Kein app_user mit id=1 — Willkommens-DM unmöglich (Inhaber-Account anlegen)."
+      "[welcomeDm] Kein app_user id=",
+      senderId,
+      "— Inhaber-Account anlegen oder WELCOME_SENDER_USER_ID setzen."
     );
     return null;
   }
@@ -91,7 +120,7 @@ async function ensureWelcomeAnchorListing(client) {
          SELECT 1 FROM listing x WHERE x.is_welcome_anchor = TRUE
        )
        RETURNING id`,
-      [WELCOME_SENDER_USER_ID]
+      [senderId]
     );
   } catch (e) {
     if (e.code === "23505") {
@@ -112,43 +141,48 @@ async function ensureWelcomeAnchorListing(client) {
   const again = await client.query(
     `SELECT l.id AS listing_id
      FROM listing l
-     WHERE l.is_welcome_anchor = TRUE AND l.seller_id = $1
-     LIMIT 1`,
-    [WELCOME_SENDER_USER_ID]
+     WHERE l.is_welcome_anchor = TRUE
+     LIMIT 1`
   );
   if (again.rows[0]) {
     return Number(again.rows[0].listing_id);
   }
 
-  console.error("[welcomeDm] Anker-Listing konnte nicht ermittelt oder angelegt werden.");
+  console.error(
+    "[welcomeDm] Anker-Listing konnte nicht ermittelt oder angelegt werden (Spalte is_welcome_anchor fehlt? SQL 009)."
+  );
   return null;
 }
 
 /**
- * Legt für einen frisch registrierten User eine Konversation mit Account id = 1 an
- * und sendet die Willkommensnachricht (Absender: User id 1).
+ * Legt Konversation + erste Nachricht an (Absender: WELCOME_SENDER_USER_ID, Standard 1).
+ * @returns {{ sent: boolean, reason?: string }}
  */
 async function sendWelcomeDmToNewUser(newUserId) {
   if (process.env.WELCOME_DM_ENABLED === "0") {
     console.info("[welcomeDm] deaktiviert (WELCOME_DM_ENABLED=0).");
-    return;
+    return { sent: false, reason: "disabled" };
   }
   const buyerId = Number(newUserId);
-  const sellerId = WELCOME_SENDER_USER_ID;
+  const sellerId = welcomeSenderUserId();
 
   if (!Number.isInteger(buyerId) || buyerId < 1) {
-    return;
+    return { sent: false, reason: "invalid_user_id" };
   }
-  /** Erster registrierter Nutzer ist oft id=1 (Inhaber) — keine Konversation mit sich selbst. */
+  /** Gleiche Person als Buyer und Seller geht im Schema nicht (kein Selbst-Chat). */
   if (buyerId === sellerId) {
     console.info(
-      "[welcomeDm] übersprungen: neuer User ist id=1 (kein Selbst-Chat)."
+      "[welcomeDm] übersprungen: neuer User id=",
+      buyerId,
+      "ist Absender (kein Selbst-Chat). Zweiten Account anlegen zum Testen."
     );
-    return;
+    return { sent: false, reason: "buyer_same_as_sender" };
   }
 
+  let outcome = { sent: false, reason: "no_anchor" };
+
   await withTransaction(async (client) => {
-    const listingId = await ensureWelcomeAnchorListing(client);
+    const listingId = await ensureWelcomeAnchorListing(client, sellerId);
     if (!listingId) {
       return;
     }
@@ -169,6 +203,7 @@ async function sendWelcomeDmToNewUser(newUserId) {
       [conversationId, sellerId]
     );
     if (already.rows.length > 0) {
+      outcome = { sent: false, reason: "already_sent" };
       return;
     }
 
@@ -191,12 +226,15 @@ async function sendWelcomeDmToNewUser(newUserId) {
       "conversation=",
       conversationId
     );
+    outcome = { sent: true, reason: "ok" };
   });
+
+  return outcome;
 }
 
 module.exports = {
   sendWelcomeDmToNewUser,
   ensureWelcomeAnchorListing,
   WELCOME_MESSAGE_BODY,
-  WELCOME_SENDER_USER_ID,
+  welcomeSenderUserId,
 };
