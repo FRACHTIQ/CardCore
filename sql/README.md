@@ -17,5 +17,6 @@ Reihenfolge in PostgreSQL (z. B. Railway):
 12. **`013_user_block_report.sql`** – `user_block`, `user_report` (Blockieren & Melden)
 13. **`014_response_metrics.sql`** – Antwortzeit-Metriken (falls vorhanden)
 14. **`015_private_market.sql`** – **Private Trade:** `app_user.private_market_access`, `listing.is_private_market`
+15. **`016_private_market_invites.sql`** – Einladungscodes (`private_market_invite`, `private_market_invite_redemption`)
 
 **Hinweis:** `002` ist nur nötig, wenn die Datenbank bereits mit `001` ohne die neuen Spalten angelegt wurde. Bei einem **frischen** Setup aus `001_initial.sql` (inkl. `legal_name`, …) kann `002` übersprungen werden.

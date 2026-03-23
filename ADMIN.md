@@ -2,7 +2,7 @@
 
 ## Datenbank
 
-Nach `001_initial.sql` (enthält bereits Admin-Spalten) oder bei bestehender DB: **`sql/005_admin.sql`**, **`sql/006_app_config.sql`** in PostgreSQL ausführen (Reihenfolge siehe `sql/README.md`). Für **Private Trade** zusätzlich **`sql/015_private_market.sql`**.
+Nach `001_initial.sql` (enthält bereits Admin-Spalten) oder bei bestehender DB: **`sql/005_admin.sql`**, **`sql/006_app_config.sql`** in PostgreSQL ausführen (Reihenfolge siehe `sql/README.md`). Für **Private Trade** zusätzlich **`sql/015_private_market.sql`** und für **Einladungscodes** **`sql/016_private_market_invites.sql`**.
 
 ## Admin-Nutzer anlegen (empfohlen)
 
@@ -49,6 +49,11 @@ UPDATE app_user SET role = 'admin' WHERE email = 'deine@email.de';
 | GET | `/app-settings` | Mindest-Version, Wartung (lesen) |
 | PATCH | `/app-settings` | `min_native_version`, `maintenance_enabled`, `maintenance_message` |
 | POST | `/welcome-dm` | Willkommens-DM nachträglich senden, Body: `{ "user_id": 4 }` (nur Server-DB, z. B. Railway) |
+| GET | `/private-market-invites` | Private-Trade-Einladungscodes (Liste) |
+| POST | `/private-market-invites` | Code erzeugen, Body: `{ "max_redemptions": 1 }` optional `null` = unbegrenzt, `expires_in_days`, `note` |
+| PATCH | `/private-market-invites/:id` | Code widerrufen: `{ "revoked": true }` |
+
+**Öffentlich (mit Login):** `POST /api/private-market/redeem` – Body `{ "code": "…" }` schaltet `private_market_access` frei (pro Nutzer einmal).
 
 Öffentlich (ohne Login): **`GET /api/app/status`** – liefert `min_native_version` und `maintenance` für die Mobile-App (Startprüfung).
 

@@ -20,6 +20,7 @@ const adminRoutes = require("./routes/admin");
 const publicStatsRoutes = require("./routes/publicStats");
 const offersRoutes = require("./routes/offers");
 const dealsRoutes = require("./routes/deals");
+const privateMarketRoutes = require("./routes/privateMarket");
 
 const app = express();
 const port = Number(process.env.PORT) || 3000;
@@ -63,6 +64,14 @@ const aiLimiter = rateLimit({
   message: { error: "Zu viele KI-Anfragen. Bitte kurz warten." },
 });
 
+const privateMarketRedeemLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 25,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Zu viele Versuche. Bitte später erneut." },
+});
+
 app.use("/api/auth", authLimiter);
 app.use("/api/ai", aiLimiter);
 
@@ -80,6 +89,11 @@ app.use("/api/public", publicStatsRoutes);
 
 app.use("/api/auth", authRoutes);
 app.use("/api/users", usersRoutes);
+app.use(
+  "/api/private-market",
+  privateMarketRedeemLimiter,
+  privateMarketRoutes
+);
 app.use("/api/listings", listingsRoutes);
 app.use("/api/favorites", favoritesRoutes);
 app.use("/api/conversations", conversationsRoutes);

@@ -3,6 +3,7 @@ const { authRequired } = require("../middleware/auth");
 const { adminRequired } = require("../middleware/admin");
 const admin = require("../controllers/adminController");
 const appConfig = require("../controllers/appConfigController");
+const privateMarketInviteController = require("../controllers/privateMarketInviteController");
 
 const router = express.Router();
 
@@ -32,5 +33,18 @@ router.post("/support/tickets/:id/messages", admin.postSupportReply);
 router.patch("/support/tickets/:id", admin.patchSupportTicket);
 
 router.post("/welcome-dm", admin.postWelcomeDm);
+
+router.get(
+  "/private-market-invites",
+  privateMarketInviteController.adminList
+);
+router.post(
+  "/private-market-invites",
+  privateMarketInviteController.adminCreate
+);
+router.patch(
+  "/private-market-invites/:id",
+  privateMarketInviteController.adminPatch
+);
 
 module.exports = router;
