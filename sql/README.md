@@ -18,5 +18,8 @@ Reihenfolge in PostgreSQL (z. B. Railway):
 13. **`014_response_metrics.sql`** – Antwortzeit-Metriken (falls vorhanden)
 14. **`015_private_market.sql`** – **Private Trade:** `app_user.private_market_access`, `listing.is_private_market`
 15. **`016_private_market_invites.sql`** – Einladungscodes (`private_market_invite`, `private_market_invite_redemption`)
+16. **`017_email_verification.sql`** – `app_user.email_verified_at`, Tabelle `email_verification_otp` (6-stelliger Code per SMTP)
 
 **Hinweis:** `002` ist nur nötig, wenn die Datenbank bereits mit `001` ohne die neuen Spalten angelegt wurde. Bei einem **frischen** Setup aus `001_initial.sql` (inkl. `legal_name`, …) kann `002` übersprungen werden.
+
+**SMTP (E-Mail-Code):** Im Backend `SMTP_HOST`, `SMTP_PORT`, optional `SMTP_USER` / `SMTP_PASS`, `SMTP_FROM`, `SMTP_FROM_NAME`. Ohne `SMTP_HOST` wird der Code nur ins Server-Log geschrieben (Entwicklung).
