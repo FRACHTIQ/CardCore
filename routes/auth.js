@@ -32,7 +32,7 @@ router.post("/register", async (req, res) => {
     const result = await pool.query(
       `INSERT INTO app_user (email, password_hash)
        VALUES ($1, $2)
-       RETURNING id, email, created_at, is_admin, social_network_enabled`,
+       RETURNING id, email, created_at, is_admin, social_network_enabled, private_market_access`,
       [email, hash]
     );
     const user = result.rows[0];
@@ -74,7 +74,7 @@ router.post("/login", async (req, res) => {
 
   try {
     const result = await pool.query(
-      `SELECT id, email, password_hash, is_admin, social_network_enabled
+      `SELECT id, email, password_hash, is_admin, social_network_enabled, private_market_access
        FROM app_user WHERE email = $1`,
       [email]
     );
@@ -94,6 +94,7 @@ router.post("/login", async (req, res) => {
         is_admin: Boolean(user.is_admin),
         social_network_enabled: Boolean(user.social_network_enabled),
         social_network_unlocked: socialUnlocked(user),
+        private_market_access: Boolean(user.private_market_access),
       },
       token,
     });
@@ -108,6 +109,7 @@ router.get("/me", authRequired, async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT id, email, is_admin, social_network_enabled, social_links,
+              private_market_access,
               avg_response_hours, response_metric_samples
        FROM app_user WHERE id = $1`,
       [req.userId]
@@ -125,6 +127,7 @@ router.get("/me", authRequired, async (req, res) => {
         social_network_enabled: Boolean(u.social_network_enabled),
         social_network_unlocked: unlocked,
         social_links: unlocked ? u.social_links : [],
+        private_market_access: Boolean(u.private_market_access),
         avg_response_hours:
           u.avg_response_hours != null ? Number(u.avg_response_hours) : null,
         response_metric_samples: Number(u.response_metric_samples || 0),

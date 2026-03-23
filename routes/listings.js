@@ -16,11 +16,38 @@ function parseIntSafe(v, def, min, max) {
   return Math.min(Math.max(n, min), max);
 }
 
-/** GET /api/listings — Suche (öffentlich) */
-router.get("/", async (req, res, next) => {
+async function userHasPrivateMarketAccess(userId) {
+  const uid = userId != null ? Number(userId) : NaN;
+  if (!Number.isInteger(uid) || uid < 1) {
+    return false;
+  }
+  const r = await pool.query(
+    `SELECT private_market_access FROM app_user WHERE id = $1`,
+    [uid]
+  );
+  return Boolean(r.rows[0]?.private_market_access);
+}
+
+const SORT_WHITELIST = {
+  created_at_desc: "l.created_at DESC",
+  updated_at_desc: "l.updated_at DESC NULLS LAST, l.created_at DESC",
+  price_asc: "l.price_cents ASC NULLS LAST, l.created_at DESC",
+  price_desc: "l.price_cents DESC NULLS LAST, l.created_at DESC",
+  year_desc: "l.year DESC NULLS LAST, l.created_at DESC",
+};
+
+/** GET /api/listings — öffentlich oder Private Market (?private_market=1 + Zugang) */
+router.get("/", optionalAuth, async (req, res, next) => {
   try {
-    const q = String(req.query.q || "").trim().slice(0, 200);
+    const searchText = String(req.query.search || req.query.q || "")
+      .trim()
+      .slice(0, 200);
     const sport = String(req.query.sport || "").trim().slice(0, 80);
+    const manufacturer = String(req.query.manufacturer || "").trim().slice(0, 120);
+    const team = String(req.query.team || "").trim().slice(0, 120);
+    const cardNumber = String(req.query.card_number || "").trim().slice(0, 80);
+    const conditionGrade = String(req.query.condition_grade || "").trim().slice(0, 80);
+    const cardTypeRaw = String(req.query.card_type || "").trim().toUpperCase();
     const status = String(req.query.status || "ACTIVE").toUpperCase();
     if (!LISTING_STATUSES.has(status)) {
       throw new HttpError(400, "Ungültiger status.");
@@ -28,17 +55,102 @@ router.get("/", async (req, res, next) => {
     const limit = parseIntSafe(req.query.limit, 24, 1, 100);
     const offset = parseIntSafe(req.query.offset, 0, 0, 1_000_000);
 
+    const pm = String(req.query.private_market || "").toLowerCase();
+    const scope = String(req.query.scope || "").toLowerCase();
+    const privateOnly =
+      pm === "1" || pm === "true" || scope === "private";
+
+    const canPrivate = await userHasPrivateMarketAccess(req.userId);
+    if (privateOnly) {
+      if (!req.userId || !canPrivate) {
+        throw new HttpError(403, "Kein Zugang zum Private Market.");
+      }
+    }
+
+    const sortKey = String(req.query.sort || "created_at_desc");
+    const orderBy = SORT_WHITELIST[sortKey] || SORT_WHITELIST.created_at_desc;
+
     const params = [status];
     let where = `l.status = $1::listing_status AND COALESCE(l.is_welcome_anchor, false) = false`;
     let p = 2;
+
+    if (privateOnly) {
+      where += ` AND COALESCE(l.is_private_market, false) = true`;
+    } else {
+      where += ` AND COALESCE(l.is_private_market, false) = false`;
+    }
+
+    const sellerRaw = req.query.seller_id;
+    if (sellerRaw !== undefined && String(sellerRaw).trim() !== "") {
+      const sellerId = Number(sellerRaw);
+      if (Number.isInteger(sellerId) && sellerId >= 1) {
+        where += ` AND l.seller_id = $${p}`;
+        params.push(sellerId);
+        p += 1;
+      }
+    }
 
     if (sport) {
       where += ` AND l.sport ILIKE $${p}`;
       params.push(`%${sport}%`);
       p += 1;
     }
-    if (q) {
-      const like = `%${q}%`;
+    if (manufacturer) {
+      where += ` AND l.manufacturer ILIKE $${p}`;
+      params.push(`%${manufacturer}%`);
+      p += 1;
+    }
+    if (team) {
+      where += ` AND l.team ILIKE $${p}`;
+      params.push(`%${team}%`);
+      p += 1;
+    }
+    if (cardNumber) {
+      where += ` AND l.card_number ILIKE $${p}`;
+      params.push(`%${cardNumber}%`);
+      p += 1;
+    }
+    if (conditionGrade) {
+      where += ` AND l.condition_grade ILIKE $${p}`;
+      params.push(`%${conditionGrade}%`);
+      p += 1;
+    }
+    if (cardTypeRaw && ["BASE", "PARALLEL", "AUTO", "ROOKIE"].includes(cardTypeRaw)) {
+      where += ` AND l.card_type = $${p}::card_type`;
+      params.push(cardTypeRaw);
+      p += 1;
+    }
+
+    const yf = parseIntSafe(req.query.year_from, NaN, 1800, 2100);
+    if (Number.isFinite(yf)) {
+      where += ` AND l.year >= $${p}`;
+      params.push(yf);
+      p += 1;
+    }
+    const yt = parseIntSafe(req.query.year_to, NaN, 1800, 2100);
+    if (Number.isFinite(yt)) {
+      where += ` AND l.year <= $${p}`;
+      params.push(yt);
+      p += 1;
+    }
+
+    const minEur = Number(String(req.query.min_price_eur || "").replace(",", "."));
+    if (Number.isFinite(minEur) && minEur >= 0) {
+      const cents = Math.round(minEur * 100);
+      where += ` AND l.price_cents >= $${p}`;
+      params.push(cents);
+      p += 1;
+    }
+    const maxEur = Number(String(req.query.max_price_eur || "").replace(",", "."));
+    if (Number.isFinite(maxEur) && maxEur >= 0) {
+      const cents = Math.round(maxEur * 100);
+      where += ` AND l.price_cents <= $${p}`;
+      params.push(cents);
+      p += 1;
+    }
+
+    if (searchText) {
+      const like = `%${searchText}%`;
       where += ` AND (
         l.player_name ILIKE $${p} OR l.team ILIKE $${p + 1}
         OR l.description ILIKE $${p + 2} OR l.set_name ILIKE $${p + 3}
@@ -53,7 +165,7 @@ router.get("/", async (req, res, next) => {
       SELECT l.*
       FROM listing l
       WHERE ${where}
-      ORDER BY l.created_at DESC
+      ORDER BY ${orderBy}
       LIMIT $${p} OFFSET $${p + 1}
     `;
     params.push(limit, offset);
@@ -68,6 +180,7 @@ router.get("/", async (req, res, next) => {
       listings: listResult.rows,
       limit,
       offset,
+      private_market: privateOnly,
     });
   } catch (err) {
     next(err);
@@ -109,6 +222,10 @@ router.get("/:id", optionalAuth, async (req, res, next) => {
     if (row.status !== "ACTIVE" && !isOwner) {
       throw new HttpError(404, "Inserat nicht gefunden.");
     }
+    const canPrivate = await userHasPrivateMarketAccess(uid);
+    if (row.is_private_market && !isOwner && !canPrivate) {
+      throw new HttpError(404, "Inserat nicht gefunden.");
+    }
     res.json({ listing: row });
   } catch (err) {
     next(err);
@@ -139,9 +256,9 @@ function normalizeListingBody(body, partial) {
     out.year = Number.isInteger(y) && y >= 1800 && y <= 2100 ? y : 0;
   }
   if (!partial || body.price_cents !== undefined) {
-    const p = Number(body.price_cents);
+    const pc = Number(body.price_cents);
     out.price_cents =
-      Number.isInteger(p) && p >= 0 && p <= 1_000_000_000 ? p : 0;
+      Number.isInteger(pc) && pc >= 0 && pc <= 1_000_000_000 ? pc : 0;
   }
   if (!partial || body.card_type !== undefined) {
     const ct = String(body.card_type || "BASE").toUpperCase();
@@ -156,6 +273,9 @@ function normalizeListingBody(body, partial) {
     }
     out.status = st;
   }
+  if (!partial || body.is_private_market !== undefined) {
+    out.is_private_market = Boolean(body.is_private_market);
+  }
   return out;
 }
 
@@ -163,11 +283,14 @@ function normalizeListingBody(body, partial) {
 router.post("/", authRequired, async (req, res, next) => {
   try {
     const data = normalizeListingBody(req.body, false);
+    if (data.is_private_market && !(await userHasPrivateMarketAccess(req.userId))) {
+      throw new HttpError(403, "Private Market nur mit Freischaltung.");
+    }
     const r = await pool.query(
       `INSERT INTO listing (
          seller_id, sport, manufacturer, set_name, year, player_name, team, card_number,
-         card_type, condition_grade, price_cents, currency, description, status
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::card_type,$10,$11,$12,$13,$14::listing_status)
+         card_type, condition_grade, price_cents, currency, description, status, is_private_market
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::card_type,$10,$11,$12,$13,$14::listing_status,$15)
        RETURNING *`,
       [
         req.userId,
@@ -184,10 +307,11 @@ router.post("/", authRequired, async (req, res, next) => {
         data.currency || "EUR",
         data.description,
         data.status,
+        data.is_private_market,
       ]
     );
     const listing = r.rows[0];
-    if (listing.status === "ACTIVE") {
+    if (listing.status === "ACTIVE" && !listing.is_private_market) {
       fireAndNotifyNewListing(listing, { excludeUserId: req.userId });
     }
     res.status(201).json({ listing });
@@ -217,14 +341,20 @@ router.patch("/:id", authRequired, async (req, res, next) => {
 
     const data = normalizeListingBody(req.body, true);
     const merged = { ...row, ...data };
+    if (merged.is_private_market && !(await userHasPrivateMarketAccess(req.userId))) {
+      throw new HttpError(403, "Private Market nur mit Freischaltung.");
+    }
+
     const r = await pool.query(
       `UPDATE listing SET
          sport = $1, manufacturer = $2, set_name = $3, year = $4,
          player_name = $5, team = $6, card_number = $7,
          card_type = $8::card_type, condition_grade = $9,
          price_cents = $10, currency = $11, description = $12,
-         status = $13::listing_status, updated_at = NOW()
-       WHERE id = $14 AND seller_id = $15
+         status = $13::listing_status,
+         is_private_market = $14,
+         updated_at = NOW()
+       WHERE id = $15 AND seller_id = $16
        RETURNING *`,
       [
         merged.sport,
@@ -240,12 +370,13 @@ router.patch("/:id", authRequired, async (req, res, next) => {
         merged.currency || "EUR",
         merged.description,
         merged.status,
+        Boolean(merged.is_private_market),
         id,
         req.userId,
       ]
     );
     const listing = r.rows[0];
-    if (listing.status === "ACTIVE") {
+    if (listing.status === "ACTIVE" && !listing.is_private_market) {
       fireAndNotifyNewListing(listing, { excludeUserId: req.userId });
     }
     res.json({ listing });

@@ -9,7 +9,7 @@ router.use(requireAdmin);
 
 /**
  * PATCH /api/admin/users/:id
- * Body: { social_network_enabled?: boolean, is_admin?: boolean }
+ * Body: { social_network_enabled?: boolean, is_admin?: boolean, private_market_access?: boolean }
  */
 router.patch("/users/:id", async (req, res, next) => {
   try {
@@ -23,10 +23,15 @@ router.patch("/users/:id", async (req, res, next) => {
       "social_network_enabled"
     );
     const hasAdmin = Object.prototype.hasOwnProperty.call(req.body, "is_admin");
+    const hasPrivateMarket = Object.prototype.hasOwnProperty.call(
+      req.body,
+      "private_market_access"
+    );
 
-    if (!hasSocial && !hasAdmin) {
+    if (!hasSocial && !hasAdmin && !hasPrivateMarket) {
       return res.status(400).json({
-        error: "Mindestens social_network_enabled oder is_admin angeben.",
+        error:
+          "Mindestens social_network_enabled, is_admin oder private_market_access angeben.",
       });
     }
 
@@ -43,12 +48,17 @@ router.patch("/users/:id", async (req, res, next) => {
       params.push(Boolean(req.body.is_admin));
       n += 1;
     }
+    if (hasPrivateMarket) {
+      fields.push(`private_market_access = $${n}::boolean`);
+      params.push(Boolean(req.body.private_market_access));
+      n += 1;
+    }
     params.push(id);
 
     const r = await pool.query(
       `UPDATE app_user SET ${fields.join(", ")}
        WHERE id = $${n}
-       RETURNING id, email, is_admin, social_network_enabled`,
+       RETURNING id, email, is_admin, social_network_enabled, private_market_access`,
       params
     );
     if (r.rows.length === 0) {
