@@ -1,9 +1,69 @@
 /**
  * Claude API – vorbereitet für spätere KI-Features (Listing-Texte, Support, Moderation).
  * Ohne ANTHROPIC_API_KEY: in Produktion HTTP 503; lokal weiter Demo-Daten (mock).
+ *
+ * ANTHROPIC_MODEL: z. B. claude-3-5-sonnet-20241022 oder neuere IDs laut Anthropic-Doku.
  */
 const Anthropic = require("@anthropic-ai/sdk");
+const { APIError } = Anthropic;
 const { HttpError } = require("../utils/httpError");
+
+function visionModel() {
+  const m = String(process.env.ANTHROPIC_MODEL || "").trim();
+  /* Ohne Env: bewährtes Sonnet mit Vision; bei 404 auf Railway ANTHROPIC_MODEL setzen. */
+  return m || "claude-3-5-sonnet-20241022";
+}
+
+/**
+ * @param {unknown} err
+ * @returns {never}
+ */
+function rethrowAnthropicAnalyze(err) {
+  if (err instanceof HttpError) {
+    throw err;
+  }
+  if (err instanceof APIError) {
+    const st = err.status;
+    if (st === 401 || st === 403) {
+      throw new HttpError(
+        503,
+        "KI-API-Schlüssel ungültig oder ohne Berechtigung (Server: ANTHROPIC_API_KEY prüfen)."
+      );
+    }
+    if (st === 404) {
+      throw new HttpError(
+        502,
+        "KI-Modell nicht gefunden. Bitte ANTHROPIC_MODEL setzen (siehe .env.example) oder Anthropic-Konto prüfen."
+      );
+    }
+    if (st === 429) {
+      throw new HttpError(
+        429,
+        "Zu viele KI-Anfragen. Bitte kurz warten und erneut versuchen."
+      );
+    }
+    if (st === 400) {
+      const hint = String(err.message || "").slice(0, 200);
+      throw new HttpError(
+        400,
+        hint || "Ungültige Anfrage an die KI (z. B. Bildformat)."
+      );
+    }
+    console.error("[anthropic] messages.create", err);
+    throw new HttpError(
+      502,
+      "KI-Dienst vorübergehend nicht erreichbar. Bitte später erneut versuchen."
+    );
+  }
+  console.error("[anthropic] analyzeCardImages", err);
+  const msg = err && err.message ? String(err.message).slice(0, 240) : "";
+  throw new HttpError(
+    502,
+    msg
+      ? `KI-Analyse fehlgeschlagen: ${msg}`
+      : "KI-Analyse fehlgeschlagen. Bitte später erneut versuchen."
+  );
+}
 
 let client = null;
 
@@ -29,7 +89,7 @@ async function completeText(userPrompt, systemPrompt) {
     throw new Error("ANTHROPIC_API_KEY ist nicht gesetzt.");
   }
   const msg = await c.messages.create({
-    model: "claude-3-5-sonnet-20241022",
+    model: visionModel(),
     max_tokens: 1024,
     system: systemPrompt || "Du hilfst bei CardCore, einer Sportkarten-Plattform. Antworte knapp auf Deutsch.",
     messages: [{ role: "user", content: userPrompt }],
@@ -65,8 +125,17 @@ function normalizeImageMime(mime) {
   if (m === "image/jpg") {
     return "image/jpeg";
   }
-  if (m === "image/png" || m === "image/webp" || m === "image/jpeg") {
+  if (
+    m === "image/png" ||
+    m === "image/webp" ||
+    m === "image/jpeg" ||
+    m === "image/gif"
+  ) {
     return m;
+  }
+  /* iOS liefert oft HEIC; API erwartet i. d. R. jpeg/png/webp – Client sollte JPEG wählen. */
+  if (m === "image/heic" || m === "image/heif") {
+    return "image/jpeg";
   }
   return "image/jpeg";
 }
@@ -76,6 +145,19 @@ function parseJsonObject(text) {
   const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/);
   const raw = fence ? fence[1].trim() : t;
   return JSON.parse(raw);
+}
+
+function assertCardAiObject(parsed) {
+  if (
+    parsed == null ||
+    typeof parsed !== "object" ||
+    Array.isArray(parsed)
+  ) {
+    throw new HttpError(
+      422,
+      "KI-Antwort war kein Objekt (z. B. nur Text). Bitte erneut versuchen."
+    );
+  }
 }
 
 function mockAnalyzeCard() {
@@ -104,10 +186,10 @@ async function analyzeCardImages(p) {
   const front = stripDataUrlBase64(p.frontBase64);
   const back = stripDataUrlBase64(p.backBase64);
   if (!front || !back) {
-    throw new Error("Vorder- und Rückseitenbild (Base64) erforderlich.");
+    throw new HttpError(400, "Vorder- und Rückseitenbild (Base64) erforderlich.");
   }
   if (front.length > 14 * 1024 * 1024 || back.length > 14 * 1024 * 1024) {
-    throw new Error("Bilder zu groß (max. ca. 10 MB pro Seite).");
+    throw new HttpError(400, "Bilder zu groß (max. ca. 10 MB pro Seite).");
   }
 
   const c = getClient();
@@ -141,43 +223,54 @@ Pflichtfelder:
 
 Nutze beide Bilder: erst Vorderseite (Spieler, Design), dann Rückseite (Infos, Nummern).`;
 
-  const msg = await c.messages.create({
-    model: "claude-3-5-sonnet-20241022",
-    max_tokens: 1200,
-    system,
-    messages: [
-      {
-        role: "user",
-        content: [
-          {
-            type: "text",
-            text: "Bild 1: VORDERSEITE der Karte. Bild 2: RÜCKSEITE der Karte. Erkenne alle lesbaren Details.",
-          },
-          {
-            type: "image",
-            source: { type: "base64", media_type: fm, data: front },
-          },
-          {
-            type: "image",
-            source: { type: "base64", media_type: bm, data: back },
-          },
-        ],
-      },
-    ],
-  });
+  let msg;
+  try {
+    msg = await c.messages.create({
+      model: visionModel(),
+      max_tokens: 1200,
+      system,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "Bild 1: VORDERSEITE der Karte. Bild 2: RÜCKSEITE der Karte. Erkenne alle lesbaren Details.",
+            },
+            {
+              type: "image",
+              source: { type: "base64", media_type: fm, data: front },
+            },
+            {
+              type: "image",
+              source: { type: "base64", media_type: bm, data: back },
+            },
+          ],
+        },
+      ],
+    });
+  } catch (e) {
+    rethrowAnthropicAnalyze(e);
+  }
 
-  const block = msg.content && msg.content[0];
-  if (!block || block.type !== "text") {
-    throw new Error("Unerwartete KI-Antwort.");
+  const blocks = Array.isArray(msg.content) ? msg.content : [];
+  const textBlock = blocks.find((b) => b && b.type === "text" && b.text);
+  if (!textBlock) {
+    throw new HttpError(
+      502,
+      "Unerwartete KI-Antwort (kein Text). Bitte erneut versuchen."
+    );
   }
   let parsed;
   try {
-    parsed = parseJsonObject(block.text);
+    parsed = parseJsonObject(textBlock.text);
   } catch {
-    throw new Error(
+    throw new HttpError(
+      422,
       "KI-Antwort war kein gültiges JSON. Bitte Fotos schärfer aufnehmen und erneut versuchen."
     );
   }
+  assertCardAiObject(parsed);
   return { ...parsed, mock: false };
 }
 

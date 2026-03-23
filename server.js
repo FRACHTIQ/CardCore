@@ -79,7 +79,8 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json({ limit: "15mb" }));
+/* Zwei Foto-Base64 + JSON brauchen mehr als 15mb (KI-Analyse). */
+app.use(express.json({ limit: "40mb" }));
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
