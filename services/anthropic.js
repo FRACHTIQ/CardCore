@@ -117,8 +117,20 @@ function rethrowAnthropicAnalyze(err) {
 let client = null;
 let clientKeyFingerprint = null;
 
+function normalizeEnvApiKey(raw) {
+  let k = String(raw || "").trim();
+  /* Railway/Copy-Paste: Wert oft als "sk-ant-..." eingetragen — Quotes würden 401 verursachen. */
+  if (
+    (k.startsWith('"') && k.endsWith('"')) ||
+    (k.startsWith("'") && k.endsWith("'"))
+  ) {
+    k = k.slice(1, -1).trim();
+  }
+  return k;
+}
+
 function getClient() {
-  const key = String(process.env.ANTHROPIC_API_KEY || "").trim();
+  const key = normalizeEnvApiKey(process.env.ANTHROPIC_API_KEY);
   if (!key) {
     client = null;
     clientKeyFingerprint = null;
