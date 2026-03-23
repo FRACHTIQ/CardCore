@@ -1,5 +1,6 @@
 const { HttpError } = require("../utils/httpError");
-const { analyzeCardImages } = require("../services/anthropic");
+const { normalizeEnvSecret } = require("../utils/envSecret");
+const { analyzeCardImages } = require("../services/cardAnalyze");
 
 const CARD_TYPES = new Set([
   "BASE",
@@ -11,7 +12,9 @@ const CARD_TYPES = new Set([
 
 function status(req, res) {
   res.json({
-    anthropic_configured: Boolean(process.env.ANTHROPIC_API_KEY),
+    anthropic_configured: Boolean(normalizeEnvSecret(process.env.ANTHROPIC_API_KEY)),
+    gemini_configured: Boolean(normalizeEnvSecret(process.env.GEMINI_API_KEY)),
+    card_ai_provider: String(process.env.CARD_AI_PROVIDER || "auto").trim() || "auto",
   });
 }
 
