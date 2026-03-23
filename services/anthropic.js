@@ -15,6 +15,40 @@ function visionModel() {
 }
 
 /**
+ * Kurzer Text aus Anthropic-Fehler (ohne riesiges JSON in der App).
+ * @param {import("@anthropic-ai/sdk").APIError} err
+ * @returns {string}
+ */
+function anthropicApiMessage(err) {
+  const body = err && err.error;
+  if (body && typeof body === "object") {
+    const nested = body.error;
+    if (nested && typeof nested === "object" && typeof nested.message === "string") {
+      return nested.message.trim();
+    }
+    if (typeof body.message === "string") {
+      return body.message.trim();
+    }
+  }
+  const m = String(err.message || "").replace(/^\d{3}\s+/, "").trim();
+  const brace = m.indexOf("{");
+  if (brace >= 0) {
+    try {
+      const o = JSON.parse(m.slice(brace));
+      if (o.error && typeof o.error.message === "string") {
+        return o.error.message.trim();
+      }
+      if (typeof o.message === "string") {
+        return o.message.trim();
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  return m.slice(0, 280);
+}
+
+/**
  * @param {unknown} err
  * @returns {never}
  */
@@ -43,10 +77,23 @@ function rethrowAnthropicAnalyze(err) {
       );
     }
     if (st === 400) {
-      const hint = String(err.message || "").slice(0, 200);
+      const apiMsg = anthropicApiMessage(err);
+      const low = apiMsg.toLowerCase();
+      if (
+        low.includes("credit balance") ||
+        low.includes("too low") ||
+        low.includes("plans & billing") ||
+        low.includes("purchase credits") ||
+        low.includes("billing")
+      ) {
+        throw new HttpError(
+          503,
+          "Automatische Erkennung ist gerade nicht verfügbar: Beim KI-Anbieter fehlt Guthaben. Bitte die Felder manuell ausfüllen oder später erneut versuchen."
+        );
+      }
       throw new HttpError(
         400,
-        hint || "Ungültige Anfrage an die KI (z. B. Bildformat)."
+        apiMsg || "Ungültige Anfrage an die KI (z. B. Bildformat)."
       );
     }
     console.error("[anthropic] messages.create", err);
