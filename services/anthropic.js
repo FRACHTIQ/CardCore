@@ -2,7 +2,7 @@
  * Claude API – vorbereitet für spätere KI-Features (Listing-Texte, Support, Moderation).
  * Ohne ANTHROPIC_API_KEY: in Produktion HTTP 503; lokal weiter Demo-Daten (mock).
  *
- * ANTHROPIC_MODEL: z. B. claude-3-5-sonnet-20241022 oder neuere IDs laut Anthropic-Doku.
+ * ANTHROPIC_MODEL: z. B. claude-3-5-sonnet-latest (SDK-Default) oder Snapshot-ID laut Doku.
  */
 const Anthropic = require("@anthropic-ai/sdk");
 const { APIError } = Anthropic;
@@ -10,8 +10,8 @@ const { HttpError } = require("../utils/httpError");
 
 function visionModel() {
   const m = String(process.env.ANTHROPIC_MODEL || "").trim();
-  /* Ohne Env: bewährtes Sonnet mit Vision; bei 404 auf Railway ANTHROPIC_MODEL setzen. */
-  return m || "claude-3-5-sonnet-20241022";
+  /* Alias laut @anthropic-ai/sdk README; feste Daten-IDs (…20241022) liefern oft 404. */
+  return m || "claude-3-5-sonnet-latest";
 }
 
 /**
