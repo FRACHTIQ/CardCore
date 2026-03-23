@@ -79,16 +79,18 @@ function rethrowAnthropicAnalyze(err) {
     if (st === 400) {
       const apiMsg = anthropicApiMessage(err);
       const low = apiMsg.toLowerCase();
-      if (
+      /* Nur echte Guthaben-Meldungen (nicht jedes "billing" in anderen 400ern). */
+      const looksLikeNoCredits =
         low.includes("credit balance") ||
-        low.includes("too low") ||
+        low.includes("too low to access") ||
         low.includes("plans & billing") ||
         low.includes("purchase credits") ||
-        low.includes("billing")
-      ) {
+        low.includes("insufficient credits") ||
+        low.includes("no credits");
+      if (looksLikeNoCredits) {
         throw new HttpError(
           503,
-          "Automatische Erkennung ist gerade nicht verfügbar: Beim KI-Anbieter fehlt Guthaben. Bitte die Felder manuell ausfüllen oder später erneut versuchen."
+          "Anthropic meldet für den API-Key auf dem Server kein nutzbares Guthaben. Aufgeladen? Dann in Railway unter Variables ANTHROPIC_API_KEY mit einem Key aus genau diesem Konto setzen und neu deployen. Sonst Felder manuell ausfüllen."
         );
       }
       throw new HttpError(
