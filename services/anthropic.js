@@ -115,14 +115,19 @@ function rethrowAnthropicAnalyze(err) {
 }
 
 let client = null;
+let clientKeyFingerprint = null;
 
 function getClient() {
-  const key = process.env.ANTHROPIC_API_KEY;
+  const key = String(process.env.ANTHROPIC_API_KEY || "").trim();
   if (!key) {
+    client = null;
+    clientKeyFingerprint = null;
     return null;
   }
-  if (!client) {
+  /* Nach Key-Änderung in Railway/.env neuen Client bauen (ohne Full-Key zu loggen). */
+  if (!client || clientKeyFingerprint !== key) {
     client = new Anthropic({ apiKey: key });
+    clientKeyFingerprint = key;
   }
   return client;
 }
