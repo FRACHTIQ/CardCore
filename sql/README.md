@@ -23,3 +23,5 @@ Reihenfolge in PostgreSQL (z. B. Railway):
 **Hinweis:** `002` ist nur nötig, wenn die Datenbank bereits mit `001` ohne die neuen Spalten angelegt wurde. Bei einem **frischen** Setup aus `001_initial.sql` (inkl. `legal_name`, …) kann `002` übersprungen werden.
 
 **SMTP (E-Mail-Code):** Im Backend `SMTP_HOST`, `SMTP_PORT`, optional `SMTP_USER` / `SMTP_PASS`, `SMTP_FROM`, `SMTP_FROM_NAME`. Ohne `SMTP_HOST` wird der Code nur ins Server-Log geschrieben (Entwicklung).
+
+**017 – Bestehende Nutzer:** Das Skript setzt für alle Zeilen mit `email_verified_at IS NULL` den Wert auf `created_at` – **bestehende Accounts gelten damit als bereits verifiziert**, die App zeigt den Code-Screen nur für **neu registrierte** Nutzer (oder nach manuellem `UPDATE app_user SET email_verified_at = NULL WHERE id = …` zum Testen).
