@@ -207,7 +207,16 @@ async function list(req, res, next) {
     }
 
     const privateFeed = wantsPrivateMarketFeed(req);
-    if (privateFeed) {
+    const viewingOwnListings =
+      sellerId !== null &&
+      !Number.isNaN(sellerId) &&
+      sellerId >= 1 &&
+      req.userId != null &&
+      sellerId === req.userId;
+
+    if (viewingOwnListings) {
+      /* Verkäufer sieht alle eigenen Listings (öffentlich + privat). */
+    } else if (privateFeed) {
       if (!req.userId) {
         throw new HttpError(403, "Private Market: Anmeldung erforderlich.");
       }
