@@ -69,7 +69,8 @@ function buildVerificationEmailHtml(displayName, code) {
                   <p style="margin:0 0 6px;font-family:${ff};font-size:12px;font-weight:700;color:#8e8e8e;text-transform:uppercase;letter-spacing:0.06em;">Sicherheit</p>
                   <p style="margin:0 0 18px;font-family:${ff};font-size:18px;font-weight:700;line-height:1.3;color:#1a1a1a;">E-Mail-Adresse bestätigen</p>
                   <p style="margin:0 0 16px;font-family:${ff};font-size:15px;line-height:1.55;color:#3d3d3d;">Hallo ${safeName},</p>
-                  <p style="margin:0 0 18px;font-family:${ff};font-size:15px;line-height:1.55;color:#5c5c5c;">Bitte gib den folgenden Code in der <strong style="color:#1a1a1a;font-weight:600;">VUREX-App</strong> ein:</p>
+                  <p style="margin:0 0 12px;font-family:${ff};font-size:15px;line-height:1.55;color:#5c5c5c;">Bitte gib den folgenden Code in der <strong style="color:#1a1a1a;font-weight:600;">VUREX-App</strong> ein:</p>
+                  <p style="margin:0 0 18px;font-family:${ff};font-size:13px;line-height:1.55;color:#8e8e8e;">Kleener Berliner Gruß: Willkommen bei VUREX - jut, dass du da bist.</p>
                   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 20px;">
                     <tr>
                       <td align="center" style="background-color:#f5f5f1;border:1px solid #e0e0dd;border-radius:10px;padding:18px 12px;">
@@ -119,6 +120,7 @@ async function sendEmailVerificationCode(opts) {
     "VUREX · E-Mail bestätigen",
     "",
     `Hallo ${displayName},`,
+    "Kleener Berliner Gruß: Willkommen bei VUREX - jut, dass du da bist.",
     "",
     `Dein Bestätigungscode: ${code}`,
     "",
