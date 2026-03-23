@@ -42,14 +42,51 @@ const API =
     ];
     let activeTab = "dashboard";
 
+    function updatePageTitle() {
+      const t = tabs.find((x) => x.id === activeTab);
+      const el = document.getElementById("page-title");
+      if (el && t) el.textContent = t.label;
+    }
+
+    function setWhoLabel(email) {
+      const w = document.getElementById("who");
+      const s = document.getElementById("who-sidebar");
+      const t = email != null ? String(email) : "";
+      if (w) {
+        w.textContent = t || "—";
+        w.title = t;
+      }
+      if (s) {
+        s.textContent = t ? "Angemeldet als\n" + t : "";
+      }
+    }
+
+    function wireShellNav() {
+      const shell = document.getElementById("admin-shell");
+      const toggle = document.getElementById("sidebar-toggle");
+      const backdrop = document.getElementById("sidebar-backdrop");
+      const nav = document.getElementById("tabs");
+      if (!shell || !toggle || !backdrop || !nav) return;
+      const close = () => shell.classList.remove("sidebar-open");
+      toggle.onclick = () => shell.classList.toggle("sidebar-open");
+      backdrop.onclick = close;
+      nav.onclick = (e) => {
+        const btn = e.target.closest("button[data-tab]");
+        if (!btn) return;
+        if (window.matchMedia("(max-width: 900px)").matches) close();
+      };
+    }
+
     function renderTabs() {
       const el = document.getElementById("tabs");
       el.innerHTML = tabs.map(t =>
-        `<button type="button" class="${t.id === activeTab ? "active" : ""}" data-tab="${t.id}">${t.label}</button>`
+        `<button type="button" class="${t.id === activeTab ? "active" : ""}" data-tab="${t.id}">${escapeHtml(t.label)}</button>`
       ).join("");
       el.querySelectorAll("button").forEach(b => {
         b.onclick = () => { activeTab = b.dataset.tab; renderTabs(); showTab(); };
       });
+      updatePageTitle();
+      wireShellNav();
     }
 
     function showTab() {
@@ -66,6 +103,7 @@ const API =
       if (activeTab === "invites") loadPrivateInvites();
       if (activeTab === "welcome") loadWelcomeTest();
       if (activeTab === "app") loadAppSettings();
+      updatePageTitle();
     }
 
     function fmtCents(c) {
@@ -253,17 +291,35 @@ const API =
       try {
         const d = await api("/dashboard");
         el.innerHTML = `
-          <div class="grid-kpi">
-            <div class="kpi"><span>Nutzer</span><strong>${d.users_total}</strong></div>
-            <div class="kpi"><span>Verifiziert</span><strong>${d.users_verified}</strong></div>
-            <div class="kpi"><span>Aktive Listings</span><strong>${d.listings_active}</strong></div>
-            <div class="kpi"><span>Verkauft</span><strong>${d.listings_sold}</strong></div>
-            <div class="kpi"><span>Lagerwert (aktiv)</span><strong>${fmtCents(d.inventory_value_active_cents)}</strong></div>
-            <div class="kpi"><span>Umsatz (SOLD)</span><strong>${fmtCents(d.revenue_sold_cents)}</strong></div>
-            <div class="kpi"><span>Support offen</span><strong>${d.support_open}</strong></div>
-            <div class="kpi"><span>Tickets gesamt</span><strong>${d.support_tickets_total}</strong></div>
-            <div class="kpi"><span>Meldungen offen</span><strong>${d.reports_open != null ? d.reports_open : "—"}</strong></div>
-          </div>`;
+          <div class="dashboard-hero">
+            <p class="dashboard-eyebrow">Übersicht</p>
+            <h2 class="dashboard-title">Was passiert gerade?</h2>
+            <p class="dashboard-lead muted">Kennzahlen aus der CardCore-API – Community, Marktplatz und Support auf einen Blick.</p>
+          </div>
+          <section class="kpi-group" aria-labelledby="kpi-group-community">
+            <h3 class="kpi-group-title" id="kpi-group-community">Community</h3>
+            <div class="grid-kpi">
+              <article class="kpi kpi--blue"><span>Nutzer</span><strong>${d.users_total}</strong></article>
+              <article class="kpi kpi--emerald"><span>Verifiziert</span><strong>${d.users_verified}</strong></article>
+            </div>
+          </section>
+          <section class="kpi-group" aria-labelledby="kpi-group-market">
+            <h3 class="kpi-group-title" id="kpi-group-market">Marktplatz</h3>
+            <div class="grid-kpi">
+              <article class="kpi kpi--violet"><span>Aktive Listings</span><strong>${d.listings_active}</strong></article>
+              <article class="kpi kpi--violet"><span>Verkauft</span><strong>${d.listings_sold}</strong></article>
+              <article class="kpi kpi--amber"><span>Lagerwert (aktiv)</span><strong>${fmtCents(d.inventory_value_active_cents)}</strong></article>
+              <article class="kpi kpi--amber"><span>Umsatz (SOLD)</span><strong>${fmtCents(d.revenue_sold_cents)}</strong></article>
+            </div>
+          </section>
+          <section class="kpi-group" aria-labelledby="kpi-group-support">
+            <h3 class="kpi-group-title" id="kpi-group-support">Support &amp; Moderation</h3>
+            <div class="grid-kpi">
+              <article class="kpi kpi--rose"><span>Support offen</span><strong>${d.support_open}</strong></article>
+              <article class="kpi kpi--blue"><span>Tickets gesamt</span><strong>${d.support_tickets_total}</strong></article>
+              <article class="kpi kpi--rose"><span>Meldungen offen</span><strong>${d.reports_open != null ? d.reports_open : "—"}</strong></article>
+            </div>
+          </section>`;
       } catch (e) {
         el.innerHTML = "<p class=\"error\">" + e.message + "</p>";
       }
@@ -904,7 +960,7 @@ const API =
         }
         setToken(data.token);
         showApp();
-        document.getElementById("who").textContent = data.user.email;
+        setWhoLabel(data.user.email);
         renderTabs();
         showTab();
       } catch (e) {
@@ -923,7 +979,7 @@ const API =
 
     if (token()) {
       showApp();
-      document.getElementById("who").textContent = "(Session)";
+      setWhoLabel("(Session)");
       renderTabs();
       showTab();
     } else {
