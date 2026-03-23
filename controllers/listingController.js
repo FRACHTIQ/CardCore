@@ -36,6 +36,26 @@ function stripListingMarketGuest(row, viewerId) {
   delete row.market_value_source;
 }
 
+async function userHasPrivateMarketAccess(userId) {
+  if (!userId) {
+    return false;
+  }
+  const r = await query(
+    `SELECT private_market_access FROM app_user WHERE id = $1`,
+    [userId]
+  );
+  return Boolean(r.rows[0]?.private_market_access);
+}
+
+function wantsPrivateMarketFeed(req) {
+  const pm = req.query.private_market;
+  const s = pm !== undefined && pm !== null ? String(pm).trim().toLowerCase() : "";
+  if (s === "1" || s === "true" || s === "yes") {
+    return true;
+  }
+  return String(req.query.scope || "").trim().toLowerCase() === "private";
+}
+
 async function recordPriceHistory(listingId, priceCents) {
   await query(
     `INSERT INTO listing_price_history (listing_id, price_cents) VALUES ($1, $2)`,
@@ -186,6 +206,20 @@ async function list(req, res, next) {
       params.push(sellerId);
     }
 
+    const privateFeed = wantsPrivateMarketFeed(req);
+    if (privateFeed) {
+      if (!req.userId) {
+        throw new HttpError(403, "Private Market: Anmeldung erforderlich.");
+      }
+      const allowed = await userHasPrivateMarketAccess(req.userId);
+      if (!allowed) {
+        throw new HttpError(403, "Kein Zugang zum Private Market.");
+      }
+      conditions.push(`l.is_private_market IS TRUE`);
+    } else {
+      conditions.push(`l.is_private_market IS NOT TRUE`);
+    }
+
     params.push(limit);
     const limitIdx = i++;
     params.push(offset);
@@ -216,6 +250,7 @@ async function list(req, res, next) {
         l.shipping_cost_cents,
         l.market_value_cents,
         l.market_value_source,
+        l.is_private_market,
         l.created_at,
         l.updated_at,
         u.display_name AS seller_display_name,
@@ -313,6 +348,13 @@ async function getById(req, res, next) {
       throw new HttpError(404, "Listing nicht gefunden.");
     }
 
+    if (row.is_private_market && !isOwner) {
+      const allowed = await userHasPrivateMarketAccess(viewer);
+      if (!allowed) {
+        throw new HttpError(404, "Listing nicht gefunden.");
+      }
+    }
+
     stripListingMarketGuest(row, viewer);
 
     res.json({ listing: row });
@@ -337,6 +379,14 @@ async function create(req, res, next) {
     const description = String(req.body.description || "");
     const imageUrls = parseImageUrls(req.body.image_urls);
     const status = req.body.status === "DRAFT" ? "DRAFT" : "ACTIVE";
+
+    const isPrivateMarket = Boolean(req.body.is_private_market);
+    if (isPrivateMarket) {
+      const allowed = await userHasPrivateMarketAccess(req.userId);
+      if (!allowed) {
+        throw new HttpError(403, "Kein Zugang zum Private Market (Listing).");
+      }
+    }
 
     if (!sport || !manufacturer || !playerName || !conditionGrade) {
       throw new HttpError(
@@ -390,10 +440,11 @@ async function create(req, res, next) {
          description, image_urls, status,
          is_graded, grading_company, grading_grade,
          shipping_included, shipping_cost_cents,
-         market_value_cents, market_value_source
+         market_value_cents, market_value_source,
+         is_private_market
        ) VALUES (
          $1, $2, $3, $4, $5, $6, $7, $8, $9::card_type, $10, $11, $12, $13, $14::jsonb, $15::listing_status,
-         $16, $17, $18, $19, $20, $21, $22
+         $16, $17, $18, $19, $20, $21, $22, $23
        )
        RETURNING *`,
       [
@@ -419,12 +470,13 @@ async function create(req, res, next) {
         shippingCostCents,
         marketValueCents,
         marketValueSource,
+        isPrivateMarket,
       ]
     );
 
     const created = result.rows[0];
     await recordPriceHistory(created.id, created.price_cents);
-    if (created.status === "ACTIVE") {
+    if (created.status === "ACTIVE" && !created.is_private_market) {
       fireAndNotifyNewListing(created, { excludeUserId: req.userId });
     }
 
@@ -564,6 +616,18 @@ async function update(req, res, next) {
       params.push(String(req.body.market_value_source).trim().slice(0, 64));
     }
 
+    if (req.body.is_private_market !== undefined) {
+      const v = Boolean(req.body.is_private_market);
+      if (v) {
+        const allowed = await userHasPrivateMarketAccess(req.userId);
+        if (!allowed) {
+          throw new HttpError(403, "Kein Zugang zum Private Market (Listing).");
+        }
+      }
+      updates.push(`is_private_market = $${i++}`);
+      params.push(v);
+    }
+
     if (updates.length === 0) {
       throw new HttpError(400, "Keine Felder zum Aktualisieren.");
     }
@@ -584,7 +648,8 @@ async function update(req, res, next) {
     if (
       updated &&
       updated.status === "ACTIVE" &&
-      oldStatus !== "ACTIVE"
+      oldStatus !== "ACTIVE" &&
+      !updated.is_private_market
     ) {
       fireAndNotifyNewListing(updated, { excludeUserId: req.userId });
     }

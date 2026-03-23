@@ -39,7 +39,7 @@ async function register(req, res, next) {
     const result = await query(
       `INSERT INTO app_user (email, password_hash, display_name, terms_accepted_at)
        VALUES ($1, $2, $3, NOW())
-       RETURNING id, email, display_name, role, created_at`,
+       RETURNING id, email, display_name, role, created_at, private_market_access`,
       [email, hash, displayName]
     );
     const user = result.rows[0];
@@ -57,6 +57,7 @@ async function register(req, res, next) {
         email: user.email,
         display_name: user.display_name,
         role: user.role || "user",
+        private_market_access: Boolean(user.private_market_access),
       },
       token,
       welcome_dm: welcomeDm,
@@ -80,7 +81,7 @@ async function login(req, res, next) {
     }
 
     const result = await query(
-      `SELECT id, email, password_hash, display_name, role, suspended_at
+      `SELECT id, email, password_hash, display_name, role, suspended_at, private_market_access
        FROM app_user WHERE email = $1`,
       [email]
     );
@@ -105,6 +106,7 @@ async function login(req, res, next) {
         email: user.email,
         display_name: user.display_name,
         role: user.role || "user",
+        private_market_access: Boolean(user.private_market_access),
       },
       token,
     });

@@ -2,7 +2,7 @@
 
 ## Datenbank
 
-Nach `001_initial.sql` (enthält bereits Admin-Spalten) oder bei bestehender DB: **`sql/005_admin.sql`**, **`sql/006_app_config.sql`** in PostgreSQL ausführen (Reihenfolge siehe `sql/README.md`).
+Nach `001_initial.sql` (enthält bereits Admin-Spalten) oder bei bestehender DB: **`sql/005_admin.sql`**, **`sql/006_app_config.sql`** in PostgreSQL ausführen (Reihenfolge siehe `sql/README.md`). Für **Private Trade** zusätzlich **`sql/015_private_market.sql`**.
 
 ## Admin-Nutzer anlegen (empfohlen)
 
@@ -38,7 +38,7 @@ UPDATE app_user SET role = 'admin' WHERE email = 'deine@email.de';
 | GET | `/revenue` | Aggregation nach Listing-Status |
 | GET | `/users` | Liste (`search`, `limit`, `offset`) |
 | GET | `/users/:id` | Nutzer-Detail inkl. Stats |
-| PATCH | `/users/:id` | `is_verified`, `verification_note`, `role`, `suspended` |
+| PATCH | `/users/:id` | `is_verified`, `verification_note`, `role`, `suspended`, **`private_market_access`** (Private Trade) |
 | GET | `/listings` | Liste mit Verkäufer (`search`, `status`, Pagination) |
 | GET | `/listings/:id` | Detail |
 | PATCH | `/listings/:id` | `status` (z. B. Moderation → `ARCHIVED`) |

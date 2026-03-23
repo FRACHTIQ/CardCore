@@ -106,6 +106,7 @@ async function listUsers(req, res, next) {
     const countSql = `SELECT COUNT(*)::int AS c FROM app_user u ${where}`;
     const listSql = `
       SELECT u.id, u.email, u.display_name, u.role, u.is_verified,
+        u.private_market_access,
         u.suspended_at, u.created_at,
         (LENGTH(u.avatar_url) > 0) AS has_avatar,
         (SELECT COUNT(*)::int FROM listing l WHERE l.seller_id = u.id AND l.status = 'ACTIVE') AS active_listings,
@@ -140,6 +141,7 @@ async function getUser(req, res, next) {
     }
     const r = await query(
       `SELECT id, email, display_name, bio, role, is_verified, verification_note,
+        private_market_access,
         suspended_at, legal_name, phone, street, address_extra, postal_code, city, country,
         created_at, updated_at,
         (LENGTH(avatar_url) > 0) AS has_avatar,
@@ -186,6 +188,10 @@ async function patchUser(req, res, next) {
       req.body.role !== undefined ? String(req.body.role).trim() : null;
     const suspended =
       req.body.suspended !== undefined ? Boolean(req.body.suspended) : null;
+    const privateMarketAccess =
+      req.body.private_market_access !== undefined
+        ? Boolean(req.body.private_market_access)
+        : null;
 
     if (role !== null && role !== "user" && role !== "admin") {
       throw new HttpError(400, "Ungültige Rolle.");
@@ -226,6 +232,10 @@ async function patchUser(req, res, next) {
       fields.push(`suspended_at = $${i++}`);
       values.push(suspended ? new Date().toISOString() : null);
     }
+    if (privateMarketAccess !== null) {
+      fields.push(`private_market_access = $${i++}`);
+      values.push(privateMarketAccess);
+    }
 
     if (fields.length === 0) {
       throw new HttpError(400, "Keine Felder.");
@@ -237,7 +247,7 @@ async function patchUser(req, res, next) {
     const sql = `
       UPDATE app_user SET ${fields.join(", ")}
       WHERE id = $${i}
-      RETURNING id, email, display_name, role, is_verified, verification_note, suspended_at, updated_at`;
+      RETURNING id, email, display_name, role, is_verified, verification_note, suspended_at, private_market_access, updated_at`;
     const result = await query(sql, values);
     res.json({ user: result.rows[0] });
   } catch (err) {
