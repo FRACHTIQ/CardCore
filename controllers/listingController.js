@@ -10,6 +10,8 @@ const CARD_TYPES = new Set([
   "ROOKIE",
 ]);
 
+const MAX_IMAGE_URL_ENTRY_CHARS = 1_500_000;
+
 function parseImageUrls(raw) {
   if (raw === undefined || raw === null) {
     return [];
@@ -17,7 +19,21 @@ function parseImageUrls(raw) {
   if (!Array.isArray(raw)) {
     throw new HttpError(400, "image_urls muss ein Array sein.");
   }
-  return raw.map((u) => String(u).trim()).filter(Boolean);
+  const out = [];
+  for (const item of raw) {
+    const u = String(item).trim();
+    if (!u) {
+      continue;
+    }
+    if (u.length > MAX_IMAGE_URL_ENTRY_CHARS) {
+      throw new HttpError(
+        400,
+        "Mindestens eine Bild-URL/Data-URL ist zu lang (max. ca. 1,5 MB Text)."
+      );
+    }
+    out.push(u);
+  }
+  return out;
 }
 
 function assertCardType(v) {
