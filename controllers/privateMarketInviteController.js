@@ -117,10 +117,13 @@ async function adminList(req, res, next) {
   try {
     const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
     const r = await query(
-      `SELECT id, code, max_redemptions, redemption_count, expires_at,
-              revoked_at, note, created_at, created_by_admin_id
-       FROM private_market_invite
-       ORDER BY created_at DESC
+      `SELECT i.id, i.code, i.max_redemptions, i.redemption_count, i.expires_at,
+              i.revoked_at, i.note, i.created_at, i.created_by_admin_id,
+              c.email AS creator_email,
+              c.display_name AS creator_display_name
+       FROM private_market_invite i
+       LEFT JOIN app_user c ON c.id = i.created_by_admin_id
+       ORDER BY i.created_at DESC
        LIMIT $1`,
       [limit]
     );
@@ -152,7 +155,22 @@ async function adminList(req, res, next) {
       });
     }
     const invites = rows.map((inv) => ({
-      ...inv,
+      id: inv.id,
+      code: inv.code,
+      max_redemptions: inv.max_redemptions,
+      redemption_count: inv.redemption_count,
+      expires_at: inv.expires_at,
+      revoked_at: inv.revoked_at,
+      note: inv.note,
+      created_at: inv.created_at,
+      created_by:
+        inv.created_by_admin_id != null
+          ? {
+              user_id: inv.created_by_admin_id,
+              email: inv.creator_email || "",
+              display_name: inv.creator_display_name || "",
+            }
+          : null,
       redemptions: byInvite[inv.id] || [],
     }));
     res.json({ invites });

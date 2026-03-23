@@ -36,6 +36,7 @@ const API =
       { id: "revenue", label: "Umsatz" },
       { id: "support", label: "Support" },
       { id: "reports", label: "Meldungen" },
+      { id: "invites", label: "Einladungscodes" },
       { id: "welcome", label: "Willkommen" },
       { id: "app", label: "App & Wartung" },
     ];
@@ -52,7 +53,7 @@ const API =
     }
 
     function showTab() {
-      ["dashboard", "users", "listings", "revenue", "support", "reports", "welcome", "app"].forEach(id => {
+      ["dashboard", "users", "listings", "revenue", "support", "reports", "invites", "welcome", "app"].forEach(id => {
         const sec = document.getElementById("tab-" + id);
         if (sec) sec.classList.toggle("hidden", id !== activeTab);
       });
@@ -62,6 +63,7 @@ const API =
       if (activeTab === "revenue") loadRevenue();
       if (activeTab === "support") loadSupport();
       if (activeTab === "reports") loadReports();
+      if (activeTab === "invites") loadPrivateInvites();
       if (activeTab === "welcome") loadWelcomeTest();
       if (activeTab === "app") loadAppSettings();
     }
@@ -546,6 +548,179 @@ const API =
       } catch (e) {
         document.getElementById("sup-list-wrap").innerHTML = "<p class=\"error\">" + e.message + "</p>";
       }
+    }
+
+    async function loadPrivateInvites() {
+      const el = document.getElementById("tab-invites");
+      el.innerHTML = `
+        <div class="panel" style="margin-bottom:0.75rem;">
+          <h2 style="margin:0 0 0.35rem; font-size:1rem;">Einladungscodes</h2>
+          <p class="muted" style="margin:0; font-size:0.88rem; line-height:1.45;">
+            Hier erzeugst du Codes und kopierst sie an Nutzer (z. B. per DM oder E-Mail).
+            <strong>In der App</strong> geben Nutzer den Code ein unter <strong>Profil → Einladung</strong> (eingeloggt).
+            Migration <code style="font-size:0.85em;">016_private_market_invites.sql</code> muss auf der Datenbank gelaufen sein.
+          </p>
+        </div>
+        <div class="panel row-actions">
+          <button type="button" id="inv-refresh">Aktualisieren</button>
+          <button type="button" id="inv-create">Neuer Code (1×)</button>
+        </div>
+        <p id="inv-msg" class="muted" style="margin:0 0 0.5rem;"></p>
+        <div id="inv-wrap">Lade…</div>`;
+
+      const render = async () => {
+        const wrap = document.getElementById("inv-wrap");
+        const msg = document.getElementById("inv-msg");
+        msg.textContent = "";
+        msg.style.color = "";
+        wrap.innerHTML = "<p class=\"muted\">Lade…</p>";
+        try {
+          const data = await api("/private-market-invites?limit=100");
+          const list = data.invites || [];
+          wrap.innerHTML =
+            list.length === 0
+              ? "<p class=\"muted\">Noch keine Codes.</p>"
+              : list
+                  .map((inv) => {
+                    const max =
+                      inv.max_redemptions == null ? "∞" : String(inv.max_redemptions);
+                    let creator = "—";
+                    if (inv.created_by) {
+                      const parts = [
+                        String(inv.created_by.display_name || "").trim(),
+                        String(inv.created_by.email || "").trim(),
+                      ].filter(Boolean);
+                      creator =
+                        parts.length > 0
+                          ? escapeHtml(parts.join(" · "))
+                          : "Nutzer #" + inv.created_by.user_id;
+                    }
+                    const reds = Array.isArray(inv.redemptions) ? inv.redemptions : [];
+                    const redRows =
+                      reds.length === 0
+                        ? "<p class=\"muted\" style=\"margin:0.35rem 0 0; font-size:0.85rem;\">Noch niemand eingelöst.</p>"
+                        : "<ul style=\"margin:0.35rem 0 0; padding-left:1.1rem; font-size:0.85rem;\">" +
+                          reds
+                            .map(
+                              (r) =>
+                                `<li>${escapeHtml(
+                                  String(r.display_name || "").trim() || "—"
+                                )} · ${escapeHtml(
+                                  r.email || ""
+                                )} · ${formatDateTime(r.redeemed_at)}</li>`
+                            )
+                            .join("") +
+                          "</ul>";
+                    const revoked = inv.revoked_at
+                      ? `<p class="muted" style="margin:0.35rem 0 0; font-size:0.85rem;">Widerrufen: ${formatDateTime(
+                          inv.revoked_at
+                        )}</p>`
+                      : `<button type="button" class="secondary danger inv-revoke" data-id="${
+                          inv.id
+                        }" style="margin-top:0.5rem;">Widerrufen</button>`;
+                    return `
+              <div class="panel" style="margin-bottom:0.75rem;">
+                <div class="row-actions" style="align-items:center; margin-bottom:0.35rem;">
+                  <code style="font-size:1.05rem; letter-spacing:0.08em; flex:1;">${escapeHtml(
+                    inv.code
+                  )}</code>
+                  <button type="button" class="secondary inv-copy" data-code="${escapeHtml(
+                    inv.code
+                  )}">Kopieren</button>
+                </div>
+                <p class="mono-small" style="margin:0;">${inv.redemption_count} / ${max} Einlösungen · Ablauf: ${formatDateTime(
+                      inv.expires_at
+                    )}</p>
+                <p class="mono-small" style="margin:0.35rem 0 0;">Erstellt: ${formatDateTime(
+                  inv.created_at
+                )}</p>
+                <p class="mono-small" style="margin:0.25rem 0 0;">Erstellt von: ${creator}</p>
+                ${
+                  inv.note
+                    ? `<p class="muted" style="margin:0.35rem 0 0; font-size:0.85rem;">${escapeHtml(
+                        inv.note
+                      )}</p>`
+                    : ""
+                }
+                <p style="margin:0.65rem 0 0; font-size:0.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em;">Eingelöst von</p>
+                ${redRows}
+                ${revoked}
+              </div>`;
+                  })
+                  .join("");
+          wrap.querySelectorAll(".inv-copy").forEach((b) => {
+            b.onclick = async () => {
+              const code = b.getAttribute("data-code") || "";
+              try {
+                await navigator.clipboard.writeText(code);
+                msg.textContent = "Code kopiert.";
+                msg.style.color = "var(--ok)";
+              } catch {
+                msg.textContent = "Kopieren fehlgeschlagen.";
+                msg.style.color = "var(--danger)";
+              }
+            };
+          });
+          wrap.querySelectorAll(".inv-revoke").forEach((b) => {
+            b.onclick = async () => {
+              const id = Number(b.dataset.id);
+              if (
+                !window.confirm(
+                  "Code widerrufen? Neue Einlösungen sind danach nicht mehr möglich."
+                )
+              ) {
+                return;
+              }
+              try {
+                await api("/private-market-invites/" + id, {
+                  method: "PATCH",
+                  body: JSON.stringify({ revoked: true }),
+                });
+                await render();
+              } catch (e) {
+                msg.textContent = e.message;
+                msg.style.color = "var(--danger)";
+              }
+            };
+          });
+        } catch (e) {
+          wrap.innerHTML =
+            "<p class=\"error\">" + escapeHtml(e.message) + "</p>";
+        }
+      };
+
+      document.getElementById("inv-refresh").onclick = () => {
+        render();
+      };
+      document.getElementById("inv-create").onclick = async () => {
+        const msg = document.getElementById("inv-msg");
+        msg.textContent = "";
+        msg.style.color = "";
+        try {
+          const res = await api("/private-market-invites", {
+            method: "POST",
+            body: JSON.stringify({ max_redemptions: 1, note: "Web-Admin" }),
+          });
+          const code = res.invite && res.invite.code;
+          await render();
+          if (code) {
+            try {
+              await navigator.clipboard.writeText(code);
+              msg.textContent =
+                "Neuer Code erstellt und in die Zwischenablage kopiert: " + code;
+              msg.style.color = "var(--ok)";
+            } catch {
+              msg.textContent = "Neuer Code: " + code;
+              msg.style.color = "var(--muted)";
+            }
+          }
+        } catch (e) {
+          msg.textContent = e.message;
+          msg.style.color = "var(--danger)";
+        }
+      };
+
+      await render();
     }
 
     async function loadReports() {
