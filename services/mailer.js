@@ -33,11 +33,13 @@ function escapeHtml(s) {
 }
 
 /**
- * Dunkles, reduziertes Layout — tabellenbasiert für gängige Mail-Clients.
+ * Helles, sachliches Layout (Marktplatz-App) — tabellenbasiert für Mail-Clients.
  */
 function buildVerificationEmailHtml(displayName, code) {
   const safeName = escapeHtml(displayName);
   const safeCode = escapeHtml(code);
+  const ff =
+    "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
   return `<!DOCTYPE html>
 <html lang="de">
 <head>
@@ -45,45 +47,46 @@ function buildVerificationEmailHtml(displayName, code) {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VUREX – E-Mail bestätigen</title>
 </head>
-<body style="margin:0;padding:0;background-color:#0a0a0c;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#0a0a0c;border-collapse:collapse;">
+<body style="margin:0;padding:0;background-color:#ebebe8;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#ebebe8;border-collapse:collapse;">
   <tr>
-    <td align="center" style="padding:48px 20px 56px;">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;border-collapse:collapse;">
+    <td align="center" style="padding:40px 16px 48px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;border-collapse:collapse;">
         <tr>
-          <td align="center" style="padding:0 0 28px;">
-            <span style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:11px;font-weight:700;letter-spacing:0.35em;color:rgba(255,255,255,0.45);text-transform:uppercase;">Sammlerbörse</span>
-            <div style="font-family:Georgia,'Times New Roman',serif;font-size:32px;font-weight:700;font-style:italic;letter-spacing:-0.02em;color:#ffffff;margin-top:10px;">VUREX</div>
+          <td style="padding:0 4px 20px;">
+            <p style="margin:0;font-family:${ff};font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#1a1a1a;line-height:1.2;">VUREX</p>
+            <p style="margin:6px 0 0;font-family:${ff};font-size:13px;font-weight:500;line-height:1.4;color:#5c5c5c;">Marktplatz für Sammelkarten</p>
           </td>
         </tr>
         <tr>
-          <td style="background-color:#12131a;border:1px solid rgba(255,255,255,0.08);border-radius:20px;padding:0;overflow:hidden;">
+          <td style="background-color:#ffffff;border:1px solid #e0e0dd;border-radius:12px;padding:0;overflow:hidden;">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
               <tr>
-                <td style="height:3px;background-color:#ffffff;line-height:3px;font-size:0;">&nbsp;</td>
+                <td style="height:4px;background-color:#1a1a1a;line-height:4px;font-size:0;">&nbsp;</td>
               </tr>
               <tr>
-                <td style="padding:36px 32px 32px;">
-                  <p style="margin:0 0 8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.5);">E-Mail bestätigen</p>
-                  <p style="margin:0 0 24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:20px;font-weight:600;line-height:1.35;color:#f4f4f5;">Hallo ${safeName},</p>
-                  <p style="margin:0 0 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:rgba(255,255,255,0.72);">Nutze diesen Code in der App, um deine E-Mail-Adresse zu bestätigen:</p>
-                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 24px;">
+                <td style="padding:28px 24px 26px;">
+                  <p style="margin:0 0 6px;font-family:${ff};font-size:12px;font-weight:700;color:#8e8e8e;text-transform:uppercase;letter-spacing:0.06em;">Sicherheit</p>
+                  <p style="margin:0 0 18px;font-family:${ff};font-size:18px;font-weight:700;line-height:1.3;color:#1a1a1a;">E-Mail-Adresse bestätigen</p>
+                  <p style="margin:0 0 16px;font-family:${ff};font-size:15px;line-height:1.55;color:#3d3d3d;">Hallo ${safeName},</p>
+                  <p style="margin:0 0 18px;font-family:${ff};font-size:15px;line-height:1.55;color:#5c5c5c;">Bitte gib den folgenden Code in der <strong style="color:#1a1a1a;font-weight:600;">VUREX-App</strong> ein:</p>
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 20px;">
                     <tr>
-                      <td align="center" style="background-color:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:22px 16px;">
-                        <span style="font-family:'SF Mono',ui-monospace,Menlo,Consolas,monospace;font-size:30px;font-weight:700;letter-spacing:0.45em;color:#ffffff;">${safeCode}</span>
+                      <td align="center" style="background-color:#f5f5f1;border:1px solid #e0e0dd;border-radius:10px;padding:18px 12px;">
+                        <span style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:26px;font-weight:700;letter-spacing:0.28em;color:#1a1a1a;">${safeCode}</span>
                       </td>
                     </tr>
                   </table>
-                  <p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:1.6;color:rgba(255,255,255,0.48);">Gültig für <strong style="color:rgba(255,255,255,0.65);font-weight:600;">15 Minuten</strong>. Wenn du dich nicht bei VUREX registriert hast, kannst du diese E-Mail ignorieren.</p>
+                  <p style="margin:0;font-family:${ff};font-size:13px;line-height:1.6;color:#8e8e8e;">Der Code ist <strong style="color:#5c5c5c;font-weight:600;">15&nbsp;Minuten</strong> gültig. Wenn du kein Konto bei VUREX angelegt hast, kannst du diese E-Mail löschen.</p>
                 </td>
               </tr>
             </table>
           </td>
         </tr>
         <tr>
-          <td align="center" style="padding:28px 8px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:1.6;color:rgba(255,255,255,0.35);">
-            © VUREX · Sammelkarten handeln<br>
-            <span style="color:rgba(255,255,255,0.25);">Diese Nachricht wurde automatisch versendet.</span>
+          <td style="padding:22px 8px 0;font-family:${ff};font-size:11px;line-height:1.55;color:#8e8e8e;text-align:center;">
+            VUREX GmbH · Service-Nachricht<br>
+            <span style="color:#b0b0ac;">Automatisch versendet · bitte nicht antworten</span>
           </td>
         </tr>
       </table>
