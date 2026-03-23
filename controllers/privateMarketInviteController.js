@@ -124,7 +124,38 @@ async function adminList(req, res, next) {
        LIMIT $1`,
       [limit]
     );
-    res.json({ invites: r.rows });
+    const rows = r.rows;
+    if (rows.length === 0) {
+      res.json({ invites: [] });
+      return;
+    }
+    const ids = rows.map((x) => x.id);
+    const red = await query(
+      `SELECT r.invite_id, r.user_id, r.redeemed_at,
+              u.email, u.display_name
+       FROM private_market_invite_redemption r
+       JOIN app_user u ON u.id = r.user_id
+       WHERE r.invite_id = ANY($1::int[])
+       ORDER BY r.redeemed_at DESC`,
+      [ids]
+    );
+    const byInvite = {};
+    for (const row of red.rows) {
+      if (!byInvite[row.invite_id]) {
+        byInvite[row.invite_id] = [];
+      }
+      byInvite[row.invite_id].push({
+        user_id: row.user_id,
+        email: row.email,
+        display_name: row.display_name || "",
+        redeemed_at: row.redeemed_at,
+      });
+    }
+    const invites = rows.map((inv) => ({
+      ...inv,
+      redemptions: byInvite[inv.id] || [],
+    }));
+    res.json({ invites });
   } catch (err) {
     next(err);
   }

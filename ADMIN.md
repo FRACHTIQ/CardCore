@@ -49,7 +49,7 @@ UPDATE app_user SET role = 'admin' WHERE email = 'deine@email.de';
 | GET | `/app-settings` | Mindest-Version, Wartung (lesen) |
 | PATCH | `/app-settings` | `min_native_version`, `maintenance_enabled`, `maintenance_message` |
 | POST | `/welcome-dm` | Willkommens-DM nachträglich senden, Body: `{ "user_id": 4 }` (nur Server-DB, z. B. Railway) |
-| GET | `/private-market-invites` | Private-Trade-Einladungscodes (Liste) |
+| GET | `/private-market-invites` | Private-Trade-Einladungscodes (Liste inkl. `redemptions`: wer eingelöst hat) |
 | POST | `/private-market-invites` | Code erzeugen, Body: `{ "max_redemptions": 1 }` optional `null` = unbegrenzt, `expires_in_days`, `note` |
 | PATCH | `/private-market-invites/:id` | Code widerrufen: `{ "revoked": true }` |
 
