@@ -30,22 +30,51 @@ const API =
     }
 
     const tabs = [
-      { id: "dashboard", label: "Dashboard" },
-      { id: "users", label: "Nutzer" },
-      { id: "listings", label: "Karten" },
-      { id: "revenue", label: "Umsatz" },
-      { id: "support", label: "Support" },
-      { id: "reports", label: "Meldungen" },
-      { id: "invites", label: "Einladungscodes" },
-      { id: "welcome", label: "Willkommen" },
-      { id: "app", label: "App & Wartung" },
+      { id: "dashboard", label: "Dashboard", kicker: "Übersicht", icon: "dashboard" },
+      { id: "users", label: "Nutzer", kicker: "Accounts & Moderation", icon: "users" },
+      { id: "listings", label: "Karten", kicker: "Listings & Markt", icon: "listings" },
+      { id: "revenue", label: "Umsatz", kicker: "Finanzen", icon: "revenue" },
+      { id: "support", label: "Support", kicker: "Tickets", icon: "support" },
+      { id: "reports", label: "Meldungen", kicker: "Moderation", icon: "reports" },
+      { id: "invites", label: "Einladungscodes", kicker: "Private Trade", icon: "invites" },
+      { id: "welcome", label: "Willkommen", kicker: "Messaging", icon: "welcome" },
+      { id: "app", label: "App & Wartung", kicker: "System", icon: "app" },
     ];
     let activeTab = "dashboard";
 
+    function navIconSvg(kind) {
+      const a =
+        'class="nav-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
+      switch (kind) {
+        case "dashboard":
+          return `<svg ${a} aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>`;
+        case "users":
+          return `<svg ${a} aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`;
+        case "listings":
+          return `<svg ${a} aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 10h10M7 14h6"/></svg>`;
+        case "revenue":
+          return `<svg ${a} aria-hidden="true"><path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>`;
+        case "support":
+          return `<svg ${a} aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`;
+        case "reports":
+          return `<svg ${a} aria-hidden="true"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>`;
+        case "invites":
+          return `<svg ${a} aria-hidden="true"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 11.5"/><path d="M15 2l6 6"/></svg>`;
+        case "welcome":
+          return `<svg ${a} aria-hidden="true"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>`;
+        case "app":
+          return `<svg ${a} aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>`;
+        default:
+          return `<svg ${a} aria-hidden="true"><circle cx="12" cy="12" r="10"/></svg>`;
+      }
+    }
+
     function updatePageTitle() {
       const t = tabs.find((x) => x.id === activeTab);
-      const el = document.getElementById("page-title");
-      if (el && t) el.textContent = t.label;
+      const titleEl = document.getElementById("page-title");
+      const kickerEl = document.getElementById("page-kicker");
+      if (titleEl && t) titleEl.textContent = t.label;
+      if (kickerEl && t) kickerEl.textContent = t.kicker || "Bereich";
     }
 
     function setWhoLabel(email) {
@@ -80,7 +109,10 @@ const API =
     function renderTabs() {
       const el = document.getElementById("tabs");
       el.innerHTML = tabs.map(t =>
-        `<button type="button" class="${t.id === activeTab ? "active" : ""}" data-tab="${t.id}">${escapeHtml(t.label)}</button>`
+        `<button type="button" class="${t.id === activeTab ? "active" : ""}" data-tab="${t.id}">` +
+          `<span class="nav-ico-wrap" aria-hidden="true">${navIconSvg(t.icon)}</span>` +
+          `<span class="nav-label">${escapeHtml(t.label)}</span>` +
+        `</button>`
       ).join("");
       el.querySelectorAll("button").forEach(b => {
         b.onclick = () => { activeTab = b.dataset.tab; renderTabs(); showTab(); };
@@ -114,6 +146,31 @@ const API =
       const d = document.createElement("div");
       d.textContent = s ?? "";
       return d.innerHTML;
+    }
+
+    function loadingHtml(message) {
+      const m = message != null ? String(message) : "Lade Daten…";
+      return (
+        `<div class="loading-block" role="status" aria-live="polite">` +
+          `<span class="loading-dot"></span><span class="loading-dot"></span><span class="loading-dot"></span>` +
+          `<span>${escapeHtml(m)}</span>` +
+        `</div>`
+      );
+    }
+
+    function dashboardSkeletonHtml() {
+      const sk = `<article class="kpi kpi-skeleton" aria-hidden="true"><span>—</span><strong>—</strong></article>`;
+      return (
+        `<div class="dashboard-hero-row" style="margin-bottom:1.35rem;">` +
+          `<div class="dashboard-hero">` +
+            `<p class="dashboard-eyebrow">Übersicht</p>` +
+            `<h2 class="dashboard-title">Kennzahlen</h2>` +
+            `<p class="dashboard-lead muted">Daten werden geladen …</p>` +
+          `</div>` +
+        `</div>` +
+        `<div class="kpi-group"><div class="grid-kpi">${sk}${sk}${sk}${sk}${sk}${sk}</div></div>` +
+        loadingHtml("Verbindung zur API …")
+      );
     }
 
     function formatDateTime(iso) {
@@ -151,7 +208,7 @@ const API =
 
     async function loadWelcomeTest() {
       const el = document.getElementById("tab-welcome");
-      el.innerHTML = "<p class=\"muted\">Lade Nutzer…</p>";
+      el.innerHTML = `<div class="panel">${loadingHtml("Nutzerliste wird geladen …")}</div>`;
       const esc = (s) => {
         const d = document.createElement("div");
         d.textContent = s ?? "";
@@ -164,11 +221,13 @@ const API =
         ).join("");
         el.innerHTML = `
           <div class="panel">
-            <h2 style="margin:0 0 0.5rem; font-size:1rem;">Willkommens-Testnachricht</h2>
-            <p class="muted" style="margin:0 0 0.75rem; font-size:0.85rem;">
-              Sendet die gleiche automatische Nachricht wie bei der Registrierung (erscheint in <strong>Nachrichten</strong> der App).
-              Funktioniert nicht, wenn der gewählte Nutzer derselbe wie der Absender ist (Standard: User-ID 1).
-            </p>
+            <div class="panel-header">
+              <h2>Willkommens-Testnachricht</h2>
+              <p class="muted">
+                Sendet die gleiche automatische Nachricht wie bei der Registrierung (erscheint in <strong>Nachrichten</strong> der App).
+                Funktioniert nicht, wenn der gewählte Nutzer derselbe wie der Absender ist (Standard: User-ID 1).
+              </p>
+            </div>
             <label>Suche (E-Mail / Name)<input type="search" id="welcome-search" placeholder="Filter…" /></label>
             <div class="row-actions" style="margin-top:0.5rem">
               <button type="button" class="secondary" id="welcome-refresh">Liste aktualisieren</button>
@@ -242,7 +301,7 @@ const API =
 
     async function loadAppSettings() {
       const el = document.getElementById("tab-app");
-      el.innerHTML = "<p class=\"muted\">Lade…</p>";
+      el.innerHTML = `<div class="panel">${loadingHtml("Einstellungen werden geladen …")}</div>`;
       try {
         const data = await api("/app-settings");
         const s = data.settings;
@@ -250,8 +309,10 @@ const API =
         const mm = escapeHtml(s.maintenance_message);
         el.innerHTML = `
           <div class="panel">
-            <h2 style="margin:0 0 0.5rem; font-size:1rem;">App &amp; Wartung</h2>
-            <p class="muted" style="margin:0 0 0.75rem; font-size:0.85rem;">Mindest-Version (native App, Semver). Liegt die installierte Version darunter, zeigt die App einen Update-Zwang.</p>
+            <div class="panel-header">
+              <h2>App &amp; Wartung</h2>
+              <p class="muted">Mindest-Version (native App, Semver). Liegt die installierte Version darunter, zeigt die App einen Update-Zwang.</p>
+            </div>
             <label>min_native_version<input type="text" id="min-ver" value="${mv}" /></label>
             <label style="margin-top:1rem; display:flex; align-items:center; gap:0.5rem; cursor:pointer;">
               <input type="checkbox" id="maint-enabled" ${s.maintenance_enabled ? "checked" : ""} />
@@ -287,14 +348,23 @@ const API =
 
     async function loadDashboard() {
       const el = document.getElementById("tab-dashboard");
-      el.innerHTML = "<p class=\"muted\">Lade…</p>";
+      el.innerHTML = dashboardSkeletonHtml();
       try {
         const d = await api("/dashboard");
+        const refreshed = new Date().toLocaleString("de-DE", {
+          dateStyle: "medium",
+          timeStyle: "medium",
+        });
         el.innerHTML = `
-          <div class="dashboard-hero">
-            <p class="dashboard-eyebrow">Übersicht</p>
-            <h2 class="dashboard-title">Was passiert gerade?</h2>
-            <p class="dashboard-lead muted">Kennzahlen aus der CardCore-API – Community, Marktplatz und Support auf einen Blick.</p>
+          <div class="dashboard-hero-row">
+            <div class="dashboard-hero">
+              <p class="dashboard-eyebrow">Übersicht</p>
+              <h2 class="dashboard-title">Was passiert gerade?</h2>
+              <p class="dashboard-lead muted">Kennzahlen aus der CardCore-API – Community, Marktplatz und Support auf einen Blick.</p>
+            </div>
+            <div class="dashboard-actions">
+              <button type="button" class="secondary" id="dash-refresh">Aktualisieren</button>
+            </div>
           </div>
           <section class="kpi-group" aria-labelledby="kpi-group-community">
             <h3 class="kpi-group-title" id="kpi-group-community">Community</h3>
@@ -319,43 +389,61 @@ const API =
               <article class="kpi kpi--blue"><span>Tickets gesamt</span><strong>${d.support_tickets_total}</strong></article>
               <article class="kpi kpi--rose"><span>Meldungen offen</span><strong>${d.reports_open != null ? d.reports_open : "—"}</strong></article>
             </div>
-          </section>`;
+          </section>
+          <p class="dashboard-meta muted">Datenstand: ${escapeHtml(refreshed)} · <span class="inline-code">GET /api/admin/dashboard</span></p>`;
+        const dr = document.getElementById("dash-refresh");
+        if (dr) dr.onclick = () => loadDashboard();
       } catch (e) {
-        el.innerHTML = "<p class=\"error\">" + e.message + "</p>";
+        el.innerHTML = "<p class=\"error\">" + escapeHtml(e.message) + "</p>";
       }
     }
 
     async function loadUsers() {
       const el = document.getElementById("tab-users");
       el.innerHTML = `
-        <div class="panel row-actions">
-          <input type="search" id="user-search" placeholder="Suche E-Mail / Name" style="flex:1;min-width:160px;margin:0" />
-          <button type="button" id="user-refresh">Aktualisieren</button>
-        </div>
-        <div class="panel" id="user-table-wrap">Lade…</div>`;
+        <div class="panel panel-flush">
+          <div class="panel-toolbar toolbar">
+            <input type="search" id="user-search" placeholder="E-Mail oder Anzeigename …" style="flex:1;min-width:200px;margin:0" />
+            <button type="button" class="secondary" id="user-refresh">Aktualisieren</button>
+          </div>
+          <div id="user-table-wrap">${loadingHtml("Nutzer werden geladen …")}</div>
+        </div>`;
       const run = async () => {
+        const wrap = document.getElementById("user-table-wrap");
         const q = document.getElementById("user-search").value.trim();
         const path = "/users?limit=50" + (q ? "&search=" + encodeURIComponent(q) : "");
+        wrap.innerHTML = loadingHtml("Suche läuft …");
         try {
           const data = await api(path);
-          const rows = data.users.map(u => `<tr>
-            <td>${u.id}</td>
+          const rows = data.users.map(u => {
+            const ver = u.is_verified
+              ? "<span class=\"pill pill-ok\">Verifiziert</span>"
+              : "<span class=\"pill pill-neutral\">Offen</span>";
+            const st = u.suspended_at
+              ? "<span class=\"pill pill-warn\">Gesperrt</span>"
+              : "<span class=\"pill pill-ok\">Aktiv</span>";
+            const rolePill = `<span class="pill pill-neutral">${escapeHtml(u.role)}</span>`;
+            return `<tr>
+            <td class="cell-mono">${u.id}</td>
             <td>${escapeHtml(u.email)}</td>
-            <td>${escapeHtml(u.display_name || "")}</td>
-            <td>${u.role}</td>
-            <td>${u.is_verified ? "ja" : "nein"}</td>
-            <td>${u.suspended_at ? "gesperrt" : "—"}</td>
+            <td>${escapeHtml(u.display_name || "—")}</td>
+            <td>${rolePill}</td>
+            <td>${ver}</td>
+            <td>${st}</td>
             <td><button type="button" class="secondary user-detail" data-id="${u.id}">Details</button></td>
-          </tr>`).join("");
-          document.getElementById("user-table-wrap").innerHTML = `
-            <p class="muted">${data.total} Treffer</p>
-            <table><thead><tr><th>ID</th><th>E-Mail</th><th>Name</th><th>Rolle</th><th>Verif.</th><th>Status</th><th></th></tr></thead>
-            <tbody>${rows || "<tr><td colspan=\"7\">Keine Daten</td></tr>"}</tbody></table>`;
+          </tr>`;
+          }).join("");
+          wrap.innerHTML = `
+            <p class="muted" style="margin:0;padding:0.65rem 1rem 0.35rem;font-size:0.82rem;">${data.total} Treffer</p>
+            <div class="table-scroll">
+            <table class="data-table"><thead><tr><th>ID</th><th>E-Mail</th><th>Name</th><th>Rolle</th><th>Verifizierung</th><th>Status</th><th></th></tr></thead>
+            <tbody>${rows || "<tr><td colspan=\"7\" class=\"empty-hint\">Keine Treffer für diese Suche.</td></tr>"}</tbody></table>
+            </div>`;
           document.querySelectorAll(".user-detail").forEach(b => {
             b.onclick = () => openUserDetail(Number(b.dataset.id));
           });
         } catch (e) {
-          document.getElementById("user-table-wrap").innerHTML = "<p class=\"error\">" + e.message + "</p>";
+          wrap.innerHTML = "<p class=\"error\" style=\"padding:1rem;\">" + escapeHtml(e.message) + "</p>";
         }
       };
       document.getElementById("user-refresh").onclick = run;
@@ -365,7 +453,7 @@ const API =
 
     async function openUserDetail(id) {
       const el = document.getElementById("tab-users");
-      el.innerHTML = "<p>Lade…</p>";
+      el.innerHTML = `<div class="panel">${loadingHtml("Profil wird geladen …")}</div>`;
       try {
         const { user, stats } = await api("/users/" + id);
         const role = user.role || "user";
@@ -479,40 +567,46 @@ const API =
     async function loadListings() {
       const el = document.getElementById("tab-listings");
       el.innerHTML = `
-        <div class="panel row-actions">
-          <input type="search" id="list-search" placeholder="Spieler / Hersteller / E-Mail" style="flex:1;min-width:160px;margin:0" />
-          <select id="list-status" style="width:auto;margin:0">
-            <option value="">Alle Status</option>
-            <option>ACTIVE</option><option>SOLD</option><option>DRAFT</option><option>ARCHIVED</option>
-          </select>
-          <button type="button" id="list-refresh">Aktualisieren</button>
-        </div>
-        <div class="panel" id="list-table-wrap">Lade…</div>`;
+        <div class="panel panel-flush">
+          <div class="panel-toolbar toolbar">
+            <input type="search" id="list-search" placeholder="Spieler, Hersteller, E-Mail …" style="flex:1;min-width:180px;margin:0" />
+            <select id="list-status" style="width:auto;min-width:9.5rem;margin:0">
+              <option value="">Alle Status</option>
+              <option>ACTIVE</option><option>SOLD</option><option>DRAFT</option><option>ARCHIVED</option>
+            </select>
+            <button type="button" class="secondary" id="list-refresh">Aktualisieren</button>
+          </div>
+          <div id="list-table-wrap">${loadingHtml("Listings werden geladen …")}</div>
+        </div>`;
       const run = async () => {
+        const wrap = document.getElementById("list-table-wrap");
         const q = document.getElementById("list-search").value.trim();
         const st = document.getElementById("list-status").value;
         let path = "/listings?limit=50";
         if (q) path += "&search=" + encodeURIComponent(q);
         if (st) path += "&status=" + encodeURIComponent(st);
+        wrap.innerHTML = loadingHtml("Liste wird aktualisiert …");
         try {
           const data = await api(path);
           const rows = data.listings.map(l => `<tr>
-            <td>${l.id}</td>
+            <td class="cell-mono">${l.id}</td>
             <td>${escapeHtml(l.player_name)}</td>
-            <td>${l.status}</td>
+            <td><span class="pill pill-neutral">${escapeHtml(l.status)}</span></td>
             <td>${fmtCents(l.price_cents)}</td>
-            <td>${escapeHtml(l.seller_email || "")}</td>
+            <td>${escapeHtml(l.seller_email || "—")}</td>
             <td><button type="button" class="secondary list-detail" data-id="${l.id}">Details</button></td>
           </tr>`).join("");
-          document.getElementById("list-table-wrap").innerHTML = `
-            <p class="muted">${data.total} Treffer</p>
-            <table><thead><tr><th>ID</th><th>Spieler</th><th>Status</th><th>Preis</th><th>Verkäufer</th><th></th></tr></thead>
-            <tbody>${rows || "<tr><td colspan=\"6\">Keine Daten</td></tr>"}</tbody></table>`;
+          wrap.innerHTML = `
+            <p class="muted" style="margin:0;padding:0.65rem 1rem 0.35rem;font-size:0.82rem;">${data.total} Treffer</p>
+            <div class="table-scroll">
+            <table class="data-table"><thead><tr><th>ID</th><th>Spieler</th><th>Status</th><th>Preis</th><th>Verkäufer</th><th></th></tr></thead>
+            <tbody>${rows || "<tr><td colspan=\"6\" class=\"empty-hint\">Keine Listings gefunden.</td></tr>"}</tbody></table>
+            </div>`;
           document.querySelectorAll(".list-detail").forEach(b => {
             b.onclick = () => openListingDetail(Number(b.dataset.id));
           });
         } catch (e) {
-          document.getElementById("list-table-wrap").innerHTML = "<p class=\"error\">" + e.message + "</p>";
+          wrap.innerHTML = "<p class=\"error\" style=\"padding:1rem;\">" + escapeHtml(e.message) + "</p>";
         }
       };
       document.getElementById("list-refresh").onclick = run;
@@ -523,7 +617,7 @@ const API =
 
     async function openListingDetail(id) {
       const el = document.getElementById("tab-listings");
-      el.innerHTML = "<p>Lade…</p>";
+      el.innerHTML = `<div class="panel">${loadingHtml("Listing wird geladen …")}</div>`;
       try {
         const { listing } = await api("/listings/" + id);
         el.innerHTML = `
@@ -564,18 +658,27 @@ const API =
 
     async function loadRevenue() {
       const el = document.getElementById("tab-revenue");
-      el.innerHTML = "<p class=\"muted\">Lade…</p>";
+      el.innerHTML = `<div class="panel">${loadingHtml("Umsatz wird geladen …")}</div>`;
       try {
         const data = await api("/revenue");
         const rows = data.by_status.map(r => `<tr>
-          <td>${r.status}</td>
-          <td>${r.c}</td>
-          <td>${fmtCents(r.total_cents)}</td>
+          <td><span class="pill pill-neutral">${escapeHtml(r.status)}</span></td>
+          <td class="cell-mono">${r.c}</td>
+          <td><strong>${fmtCents(r.total_cents)}</strong></td>
         </tr>`).join("");
-        el.innerHTML = `<div class="panel"><table><thead><tr><th>Status</th><th>Anzahl</th><th>Summe Preis (cent)</th></tr></thead>
-          <tbody>${rows}</tbody></table></div>`;
+        el.innerHTML = `
+          <div class="panel panel-flush">
+            <div class="panel-header" style="margin:0;padding:1rem 1.1rem;border-bottom:1px solid var(--border);">
+              <h2 style="margin:0;font-size:1.02rem;">Umsatz nach Listing-Status</h2>
+              <p class="muted" style="margin:0.35rem 0 0;">Aggregation aus <span class="inline-code">/api/admin/revenue</span></p>
+            </div>
+            <div class="table-scroll">
+              <table class="data-table"><thead><tr><th>Status</th><th>Anzahl</th><th>Summe (Brutto)</th></tr></thead>
+              <tbody>${rows || "<tr><td colspan=\"3\" class=\"empty-hint\">Keine Daten.</td></tr>"}</tbody></table>
+            </div>
+          </div>`;
       } catch (e) {
-        el.innerHTML = "<p class=\"error\">" + e.message + "</p>";
+        el.innerHTML = "<p class=\"error\">" + escapeHtml(e.message) + "</p>";
       }
     }
 
@@ -584,52 +687,56 @@ const API =
     async function loadSupport() {
       supportTicketId = null;
       const el = document.getElementById("tab-support");
-      el.innerHTML = `<div class="panel" id="sup-list-wrap">Lade…</div>`;
+      el.innerHTML = `<div class="panel panel-flush" id="sup-list-wrap">${loadingHtml("Tickets werden geladen …")}</div>`;
       try {
         const data = await api("/support/tickets?limit=80");
         const rows = data.tickets.map(t => `<tr>
-          <td>${t.id}</td>
+          <td class="cell-mono">${t.id}</td>
           <td>${escapeHtml(t.subject)}</td>
-          <td>${t.status}</td>
-          <td>${escapeHtml(t.user_email || "")}</td>
+          <td><span class="pill pill-neutral">${escapeHtml(t.status)}</span></td>
+          <td>${escapeHtml(t.user_email || "—")}</td>
           <td><button type="button" class="secondary sup-open" data-id="${t.id}">Öffnen</button></td>
         </tr>`).join("");
         document.getElementById("sup-list-wrap").innerHTML = `
-          <p class="muted">${data.total} Tickets</p>
-          <table><thead><tr><th>ID</th><th>Betreff</th><th>Status</th><th>Nutzer</th><th></th></tr></thead>
-          <tbody>${rows || "<tr><td colspan=\"5\">Keine</td></tr>"}</tbody></table>`;
+          <p class="muted" style="margin:0;padding:0.65rem 1rem 0.35rem;font-size:0.82rem;">${data.total} Tickets</p>
+          <div class="table-scroll">
+          <table class="data-table"><thead><tr><th>ID</th><th>Betreff</th><th>Status</th><th>Nutzer</th><th></th></tr></thead>
+          <tbody>${rows || "<tr><td colspan=\"5\" class=\"empty-hint\">Keine offenen Tickets.</td></tr>"}</tbody></table>
+          </div>`;
         document.querySelectorAll(".sup-open").forEach(b => {
           b.onclick = () => openSupportTicket(Number(b.dataset.id));
         });
       } catch (e) {
-        document.getElementById("sup-list-wrap").innerHTML = "<p class=\"error\">" + e.message + "</p>";
+        document.getElementById("sup-list-wrap").innerHTML = "<p class=\"error\" style=\"padding:1rem;\">" + escapeHtml(e.message) + "</p>";
       }
     }
 
     async function loadPrivateInvites() {
       const el = document.getElementById("tab-invites");
       el.innerHTML = `
-        <div class="panel" style="margin-bottom:0.75rem;">
-          <h2 style="margin:0 0 0.35rem; font-size:1rem;">Einladungscodes</h2>
-          <p class="muted" style="margin:0; font-size:0.88rem; line-height:1.45;">
-            Hier erzeugst du Codes und kopierst sie an Nutzer (z. B. per DM oder E-Mail).
-            <strong>In der App</strong> geben Nutzer den Code ein unter <strong>Profil → Einladung</strong> (eingeloggt).
-            Migration <code style="font-size:0.85em;">016_private_market_invites.sql</code> muss auf der Datenbank gelaufen sein.
-          </p>
+        <div class="panel">
+          <div class="panel-header">
+            <h2>Einladungscodes</h2>
+            <p class="muted">
+              Hier erzeugst du Codes und verteilst sie z. B. per DM oder E-Mail.
+              <strong>In der App</strong> lösen Nutzer sie ein unter <strong>Profil → Einladung</strong> (eingeloggt).
+              Die Migration <span class="inline-code">016_private_market_invites.sql</span> muss auf der Datenbank gelaufen sein.
+            </p>
+          </div>
         </div>
-        <div class="panel row-actions">
-          <button type="button" id="inv-refresh">Aktualisieren</button>
+        <div class="panel toolbar">
+          <button type="button" class="secondary" id="inv-refresh">Aktualisieren</button>
           <button type="button" id="inv-create">Neuer Code (1×)</button>
         </div>
         <p id="inv-msg" class="muted" style="margin:0 0 0.5rem;"></p>
-        <div id="inv-wrap">Lade…</div>`;
+        <div id="inv-wrap">${loadingHtml("Codes werden geladen …")}</div>`;
 
       const render = async () => {
         const wrap = document.getElementById("inv-wrap");
         const msg = document.getElementById("inv-msg");
         msg.textContent = "";
         msg.style.color = "";
-        wrap.innerHTML = "<p class=\"muted\">Lade…</p>";
+        wrap.innerHTML = loadingHtml("Codes werden geladen …");
         try {
           const data = await api("/private-market-invites?limit=100");
           const list = data.invites || [];
@@ -781,40 +888,47 @@ const API =
 
     async function loadReports() {
       const el = document.getElementById("tab-reports");
-      el.innerHTML = `<div class="panel row-actions">
-        <select id="rep-filter" style="width:auto;margin:0">
-          <option value="all">Alle Status</option>
-          <option value="open">open</option>
-          <option value="reviewed">reviewed</option>
-          <option value="dismissed">dismissed</option>
-        </select>
-        <button type="button" id="rep-refresh">Aktualisieren</button>
-      </div>
-      <div class="panel" id="rep-wrap">Lade…</div>`;
+      el.innerHTML = `
+        <div class="panel panel-flush">
+          <div class="panel-toolbar toolbar">
+            <select id="rep-filter" style="width:auto;min-width:10rem;margin:0">
+              <option value="all">Alle Status</option>
+              <option value="open">open</option>
+              <option value="reviewed">reviewed</option>
+              <option value="dismissed">dismissed</option>
+            </select>
+            <button type="button" class="secondary" id="rep-refresh">Aktualisieren</button>
+          </div>
+          <div id="rep-wrap">${loadingHtml("Meldungen werden geladen …")}</div>
+        </div>`;
       const run = async () => {
+        const wrap = document.getElementById("rep-wrap");
         const f = document.getElementById("rep-filter").value;
         let path = "/reports?limit=100";
         if (f && f !== "all") path += "&status=" + encodeURIComponent(f);
+        wrap.innerHTML = loadingHtml("Filter wird angewendet …");
         try {
           const data = await api(path);
           const rows = data.reports.map(r => `<tr>
-            <td>${r.id}</td>
+            <td class="cell-mono">${r.id}</td>
             <td>${escapeHtml(String(r.reason || ""))}</td>
-            <td>${escapeHtml(String(r.status || ""))}</td>
+            <td><span class="pill pill-neutral">${escapeHtml(String(r.status || ""))}</span></td>
             <td>${escapeHtml(r.reporter_email || "")}</td>
             <td>${escapeHtml(r.reported_email || "")}</td>
-            <td>${escapeHtml(String(r.created_at || ""))}</td>
+            <td class="cell-mono">${escapeHtml(String(r.created_at || ""))}</td>
             <td><button type="button" class="secondary rep-open" data-id="${r.id}">Details</button></td>
           </tr>`).join("");
-          document.getElementById("rep-wrap").innerHTML = `
-            <p class="muted">${data.total} Meldungen</p>
-            <table><thead><tr><th>ID</th><th>Grund</th><th>Status</th><th>Melder</th><th>Gemeldet</th><th>Zeit</th><th></th></tr></thead>
-            <tbody>${rows || "<tr><td colspan=\"7\">Keine</td></tr>"}</tbody></table>`;
+          wrap.innerHTML = `
+            <p class="muted" style="margin:0;padding:0.65rem 1rem 0.35rem;font-size:0.82rem;">${data.total} Meldungen</p>
+            <div class="table-scroll">
+            <table class="data-table"><thead><tr><th>ID</th><th>Grund</th><th>Status</th><th>Melder</th><th>Gemeldet</th><th>Zeit</th><th></th></tr></thead>
+            <tbody>${rows || "<tr><td colspan=\"7\" class=\"empty-hint\">Keine Meldungen in diesem Filter.</td></tr>"}</tbody></table>
+            </div>`;
           document.querySelectorAll(".rep-open").forEach(b => {
             b.onclick = () => openReportDetail(Number(b.dataset.id));
           });
         } catch (e) {
-          document.getElementById("rep-wrap").innerHTML = "<p class=\"error\">" + escapeHtml(e.message) + "</p>";
+          wrap.innerHTML = "<p class=\"error\" style=\"padding:1rem;\">" + escapeHtml(e.message) + "</p>";
         }
       };
       document.getElementById("rep-refresh").onclick = run;
@@ -824,7 +938,7 @@ const API =
 
     async function openReportDetail(id) {
       const el = document.getElementById("tab-reports");
-      el.innerHTML = "<p>Lade…</p>";
+      el.innerHTML = `<div class="panel">${loadingHtml("Meldung wird geladen …")}</div>`;
       try {
         const data = await api("/reports/" + id);
         const r = data.report;
@@ -872,7 +986,7 @@ const API =
     async function openSupportTicket(id) {
       supportTicketId = id;
       const el = document.getElementById("tab-support");
-      el.innerHTML = "<p>Lade…</p>";
+      el.innerHTML = `<div class="panel">${loadingHtml("Ticket wird geladen …")}</div>`;
       try {
         const data = await api("/support/tickets/" + id);
         const msgs = data.messages.map(m =>
