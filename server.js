@@ -25,6 +25,39 @@ const privateMarketRoutes = require("./routes/privateMarket");
 const app = express();
 const port = Number(process.env.PORT) || 3000;
 
+/**
+ * Hinter einem Reverse-Proxy (Railway, Render, Fly, Heroku) setzt der Proxy
+ * X-Forwarded-For — dann muss Express "trust proxy" kennen, sonst wirft
+ * express-rate-limit ERR_ERL_UNEXPECTED_X_FORWARDED_FOR.
+ */
+function resolveTrustProxy() {
+  const raw = String(process.env.TRUST_PROXY ?? "").trim().toLowerCase();
+  if (raw === "0" || raw === "false" || raw === "no") {
+    return false;
+  }
+  if (raw === "1" || raw === "true" || raw === "yes") {
+    return 1;
+  }
+  const n = Number(raw);
+  if (Number.isFinite(n) && n >= 0) {
+    return n;
+  }
+  if (
+    process.env.RAILWAY_ENVIRONMENT ||
+    process.env.FLY_APP_NAME ||
+    process.env.RENDER ||
+    process.env.HEROKU_APP_NAME
+  ) {
+    return 1;
+  }
+  return false;
+}
+
+const trustProxy = resolveTrustProxy();
+if (trustProxy !== false) {
+  app.set("trust proxy", trustProxy);
+}
+
 const corsOriginsRaw = process.env.CORS_ORIGINS;
 const corsOrigins =
   corsOriginsRaw && String(corsOriginsRaw).trim().length > 0
