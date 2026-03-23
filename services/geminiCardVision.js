@@ -11,7 +11,8 @@ const {
 
 function geminiModelId() {
   const m = String(process.env.GEMINI_MODEL || "").trim();
-  return m || "gemini-2.0-flash";
+  /* Entspricht REST: v1beta/models/gemini-flash-latest:generateContent */
+  return m || "gemini-flash-latest";
 }
 
 /**
@@ -44,7 +45,7 @@ function rethrowGeminiCard(err) {
   if (low.includes("not found") || low.includes("is not found")) {
     throw new HttpError(
       502,
-      "Gemini-Modell nicht gefunden. Bitte GEMINI_MODEL setzen (z. B. gemini-1.5-flash)."
+      "Gemini-Modell nicht gefunden. Bitte GEMINI_MODEL setzen (z. B. gemini-flash-latest oder gemini-1.5-flash)."
     );
   }
   console.error("[gemini] analyzeCardImages", err);
