@@ -33,6 +33,21 @@ function normalizeYear(y) {
   return n;
 }
 
+function normalizeMarketValueEur(raw) {
+  const v =
+    raw.market_value_eur !== undefined && raw.market_value_eur !== null
+      ? raw.market_value_eur
+      : raw.estimated_market_value_eur;
+  if (v === undefined || v === null || v === "") {
+    return null;
+  }
+  const n = Number(v);
+  if (!Number.isFinite(n) || n < 0 || n > 1_000_000) {
+    return null;
+  }
+  return Math.round(n * 100) / 100;
+}
+
 async function analyzeCard(req, res, next) {
   try {
     const { front_base64, back_base64, front_mime, back_mime } = req.body || {};
@@ -61,6 +76,8 @@ async function analyzeCard(req, res, next) {
         typeof raw.confidence === "number" && raw.confidence >= 0 && raw.confidence <= 1
           ? raw.confidence
           : null,
+      market_value_eur: normalizeMarketValueEur(raw),
+      market_value_source: String(raw.market_value_source || "").trim().slice(0, 240),
       mock: Boolean(raw.mock),
     };
 

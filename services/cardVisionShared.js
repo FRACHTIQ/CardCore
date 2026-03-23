@@ -73,6 +73,8 @@ Pflichtfelder:
 - description (string, 1–3 Sätze auf Deutsch)
 - card_type (einer von: ${CARD_TYPES_AI.join(", ")})
 - confidence (Zahl 0 bis 1, wie sicher du bist)
+- market_value_eur (Zahl oder null): grobe Marktwert-Schätzung für diese Karte im abgebildeten Zustand in EUR; null wenn unsicher
+- market_value_source (string): kurz, z. B. "KI-Schätzung aus Set/Spieler/Jahr" oder leer
 
 Nutze beide Bilder: erst Vorderseite (Spieler, Design), dann Rückseite (Infos, Nummern).`;
 }
