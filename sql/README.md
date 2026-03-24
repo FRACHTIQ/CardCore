@@ -19,6 +19,7 @@ Reihenfolge in PostgreSQL (z. B. Railway):
 14. **`015_private_market.sql`** – **Private Trade:** `app_user.private_market_access`, `listing.is_private_market`
 15. **`016_private_market_invites.sql`** – Einladungscodes (`private_market_invite`, `private_market_invite_redemption`)
 16. **`017_email_verification.sql`** – `app_user.email_verified_at`, Tabelle `email_verification_otp` (6-stelliger Code per SMTP)
+17. **`018_partner_footer_link.sql`** – Partner-Link für App-Footer (`app_config.partner_name`, `app_config.partner_url`)
 
 **Hinweis:** `002` ist nur nötig, wenn die Datenbank bereits mit `001` ohne die neuen Spalten angelegt wurde. Bei einem **frischen** Setup aus `001_initial.sql` (inkl. `legal_name`, …) kann `002` übersprungen werden.
 

@@ -307,6 +307,8 @@ const API =
         const s = data.settings;
         const mv = escapeHtml(s.min_native_version);
         const mm = escapeHtml(s.maintenance_message);
+        const pn = escapeHtml(s.partner_name || "");
+        const pu = escapeHtml(s.partner_url || "");
         el.innerHTML = `
           <div class="panel">
             <div class="panel-header">
@@ -319,6 +321,10 @@ const API =
               Wartungsmodus aktiv
             </label>
             <label>Wartungstext (in der App)<textarea id="maint-msg" rows="6">${mm}</textarea></label>
+            <hr style="margin:1rem 0; border:none; border-top:1px solid var(--border);" />
+            <h3 style="margin:0 0 0.6rem; font-size:0.95rem;">Partner im App-Footer</h3>
+            <label>Partner-Name (optional)<input type="text" id="partner-name" value="${pn}" placeholder="z. B. Test Partner" /></label>
+            <label>Partner-Link (optional)<input type="url" id="partner-url" value="${pu}" placeholder="https://example.com" /></label>
             <button type="button" id="btn-save-app">Speichern</button>
             <p id="app-save-msg" class="muted"></p>
           </div>`;
@@ -333,6 +339,8 @@ const API =
                 min_native_version: document.getElementById("min-ver").value.trim(),
                 maintenance_enabled: document.getElementById("maint-enabled").checked,
                 maintenance_message: document.getElementById("maint-msg").value,
+                partner_name: document.getElementById("partner-name").value.trim(),
+                partner_url: document.getElementById("partner-url").value.trim(),
               }),
             });
             msg.textContent = "Gespeichert.";

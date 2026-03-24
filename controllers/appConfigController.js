@@ -11,7 +11,25 @@ const DEFAULT_ROW = {
   min_native_version: "1.0.0",
   maintenance_enabled: false,
   maintenance_message: "",
+  partner_name: "",
+  partner_url: "",
 };
+
+function normalizeOptionalUrl(s) {
+  const raw = String(s ?? "").trim();
+  if (!raw) {
+    return "";
+  }
+  if (!/^https?:\/\//i.test(raw)) {
+    throw new HttpError(400, "partner_url muss mit http:// oder https:// beginnen.");
+  }
+  try {
+    const u = new URL(raw);
+    return u.toString().slice(0, 2048);
+  } catch {
+    throw new HttpError(400, "partner_url ist ungültig.");
+  }
+}
 
 async function ensureRow() {
   await query(
@@ -21,7 +39,7 @@ async function ensureRow() {
 
 async function readRow() {
   const r = await query(
-    `SELECT min_native_version, maintenance_enabled, maintenance_message
+    `SELECT min_native_version, maintenance_enabled, maintenance_message, partner_name, partner_url
      FROM app_config WHERE id = 1`
   );
   return r.rows[0] || null;
@@ -38,6 +56,10 @@ async function publicStatus(req, res, next) {
           enabled: DEFAULT_ROW.maintenance_enabled,
           message: DEFAULT_ROW.maintenance_message,
         },
+        partner: {
+          name: DEFAULT_ROW.partner_name,
+          url: DEFAULT_ROW.partner_url,
+        },
       });
     }
     res.json({
@@ -45,6 +67,10 @@ async function publicStatus(req, res, next) {
       maintenance: {
         enabled: Boolean(row.maintenance_enabled),
         message: row.maintenance_message || "",
+      },
+      partner: {
+        name: row.partner_name || "",
+        url: row.partner_url || "",
       },
     });
   } catch (err) {
@@ -62,6 +88,8 @@ async function getAppSettingsAdmin(req, res, next) {
         min_native_version: row?.min_native_version || DEFAULT_ROW.min_native_version,
         maintenance_enabled: Boolean(row?.maintenance_enabled),
         maintenance_message: row?.maintenance_message || "",
+        partner_name: row?.partner_name || "",
+        partner_url: row?.partner_url || "",
         updated_at: u.rows[0]?.updated_at || null,
       },
     });
@@ -83,6 +111,14 @@ async function patchAppSettingsAdmin(req, res, next) {
     const maintMsg =
       req.body.maintenance_message !== undefined
         ? clip(req.body.maintenance_message, 8000)
+        : null;
+    const partnerName =
+      req.body.partner_name !== undefined
+        ? clip(req.body.partner_name, 120)
+        : null;
+    const partnerUrl =
+      req.body.partner_url !== undefined
+        ? normalizeOptionalUrl(req.body.partner_url)
         : null;
 
     if (minV !== null) {
@@ -111,6 +147,14 @@ async function patchAppSettingsAdmin(req, res, next) {
       sets.push(`maintenance_message = $${i++}`);
       vals.push(maintMsg);
     }
+    if (partnerName !== null) {
+      sets.push(`partner_name = $${i++}`);
+      vals.push(partnerName);
+    }
+    if (partnerUrl !== null) {
+      sets.push(`partner_url = $${i++}`);
+      vals.push(partnerUrl);
+    }
     if (sets.length === 0) {
       throw new HttpError(400, "Keine Felder.");
     }
@@ -127,6 +171,8 @@ async function patchAppSettingsAdmin(req, res, next) {
         min_native_version: row.min_native_version,
         maintenance_enabled: Boolean(row.maintenance_enabled),
         maintenance_message: row.maintenance_message || "",
+        partner_name: row.partner_name || "",
+        partner_url: row.partner_url || "",
         updated_at: u.rows[0]?.updated_at || null,
       },
     });
