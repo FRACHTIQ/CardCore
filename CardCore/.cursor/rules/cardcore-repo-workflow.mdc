@@ -1,0 +1,20 @@
+---
+description: Ein Repo, kein Klon-Chaos; Push-Workflow für CardCore
+alwaysApply: true
+---
+
+# CardCore / Backend – Arbeitsweise
+
+**Projektpfad:** `C:\Users\CENSOR\Desktop\CardCore` (nicht `Desktop\card`).
+
+**Zugehörige App (Expo/React Native):** `C:\Users\CENSOR\Desktop\CardCore-Mobile\CardCore-App` — API-Integrationen für neue Backend-Features dort umsetzen, nicht hier.
+
+## Ordner & Klonen
+
+- **Nur in diesem Projektordner** arbeiten (der geöffnete Workspace / geklontes `CardCore`-Repo).
+- **Keine** zusätzlichen Ordner wie `_cardcore_*`, `*-clone`, parallele Kopien des Repos „nur zum Lesen“ anlegen. Fehlende Dateien aus dem Remote per `git fetch` / `git checkout origin/main -- <pfad>` oder normalem Klon **einmalig** nach außerhalb des Workspaces holen – nicht im Projektbaum duplizieren.
+
+## Git & Push
+
+- Änderungen **committen** und mit **`git push`** auf den Branch pushen, den das Team nutzt.
+- Wenn `main` auf GitHub und lokal **auseinandergelaufen** sind: erst **`git pull origin main`** (ggf. mit Merge/Rebase) oder **Pull Request** auf GitHub – nicht blind `--force` auf `main`, außer der Nutzer will die Remote-Historie bewusst ersetzen.
