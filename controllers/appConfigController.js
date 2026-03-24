@@ -13,6 +13,7 @@ const DEFAULT_ROW = {
   maintenance_message: "",
   partner_name: "",
   partner_url: "",
+  partner_links_json: "[]",
 };
 
 function normalizeOptionalUrl(s) {
@@ -31,6 +32,48 @@ function normalizeOptionalUrl(s) {
   }
 }
 
+function parsePartnerLinksJson(raw) {
+  if (!raw) {
+    return [];
+  }
+  try {
+    const arr = JSON.parse(String(raw));
+    if (!Array.isArray(arr)) {
+      return [];
+    }
+    return arr
+      .map((p) => {
+        const name = clip(p?.name, 120);
+        const url = normalizeOptionalUrl(p?.url);
+        if (!name || !url) {
+          return null;
+        }
+        return { name, url };
+      })
+      .filter(Boolean)
+      .slice(0, 20);
+  } catch {
+    return [];
+  }
+}
+
+function normalizePartnerLinksInput(v) {
+  if (!Array.isArray(v)) {
+    throw new HttpError(400, "partner_links muss ein Array sein.");
+  }
+  return v
+    .map((p) => {
+      const name = clip(p?.name, 120);
+      const url = normalizeOptionalUrl(p?.url);
+      if (!name || !url) {
+        return null;
+      }
+      return { name, url };
+    })
+    .filter(Boolean)
+    .slice(0, 20);
+}
+
 async function ensureRow() {
   await query(
     `INSERT INTO app_config (id) VALUES (1) ON CONFLICT (id) DO NOTHING`
@@ -38,11 +81,20 @@ async function ensureRow() {
 }
 
 async function readRow() {
-  const r = await query(
-    `SELECT min_native_version, maintenance_enabled, maintenance_message, partner_name, partner_url
-     FROM app_config WHERE id = 1`
-  );
-  return r.rows[0] || null;
+  try {
+    const r = await query(
+      `SELECT min_native_version, maintenance_enabled, maintenance_message, partner_name, partner_url, partner_links_json
+       FROM app_config WHERE id = 1`
+    );
+    return r.rows[0] || null;
+  } catch (err) {
+    // Fallback für Umgebungen, in denen Migration 019 noch nicht gelaufen ist.
+    const r = await query(
+      `SELECT min_native_version, maintenance_enabled, maintenance_message, partner_name, partner_url, '[]'::text AS partner_links_json
+       FROM app_config WHERE id = 1`
+    );
+    return r.rows[0] || null;
+  }
 }
 
 /** Öffentlich: Mobile prüft Version & Wartung (ohne JWT). */
@@ -50,6 +102,7 @@ async function publicStatus(req, res, next) {
   try {
     const row = await readRow();
     if (!row) {
+      const partnerLinks = [];
       return res.json({
         min_native_version: DEFAULT_ROW.min_native_version,
         maintenance: {
@@ -60,8 +113,14 @@ async function publicStatus(req, res, next) {
           name: DEFAULT_ROW.partner_name,
           url: DEFAULT_ROW.partner_url,
         },
+        partner_links: partnerLinks,
       });
     }
+    const partnerLinks = parsePartnerLinksJson(row.partner_links_json);
+    const fallbackPartnerName = row.partner_name || "";
+    const fallbackPartnerUrl = row.partner_url || "";
+    const partnerName = partnerLinks[0]?.name || fallbackPartnerName;
+    const partnerUrl = partnerLinks[0]?.url || fallbackPartnerUrl;
     res.json({
       min_native_version: row.min_native_version || DEFAULT_ROW.min_native_version,
       maintenance: {
@@ -69,9 +128,10 @@ async function publicStatus(req, res, next) {
         message: row.maintenance_message || "",
       },
       partner: {
-        name: row.partner_name || "",
-        url: row.partner_url || "",
+        name: partnerName,
+        url: partnerUrl,
       },
+      partner_links: partnerLinks,
     });
   } catch (err) {
     next(err);
@@ -83,6 +143,7 @@ async function getAppSettingsAdmin(req, res, next) {
     await ensureRow();
     const row = await readRow();
     const u = await query(`SELECT updated_at FROM app_config WHERE id = 1`);
+    const partnerLinks = parsePartnerLinksJson(row?.partner_links_json);
     res.json({
       settings: {
         min_native_version: row?.min_native_version || DEFAULT_ROW.min_native_version,
@@ -90,6 +151,7 @@ async function getAppSettingsAdmin(req, res, next) {
         maintenance_message: row?.maintenance_message || "",
         partner_name: row?.partner_name || "",
         partner_url: row?.partner_url || "",
+        partner_links: partnerLinks,
         updated_at: u.rows[0]?.updated_at || null,
       },
     });
@@ -119,6 +181,10 @@ async function patchAppSettingsAdmin(req, res, next) {
     const partnerUrl =
       req.body.partner_url !== undefined
         ? normalizeOptionalUrl(req.body.partner_url)
+        : null;
+    const partnerLinks =
+      req.body.partner_links !== undefined
+        ? normalizePartnerLinksInput(req.body.partner_links)
         : null;
 
     if (minV !== null) {
@@ -155,6 +221,15 @@ async function patchAppSettingsAdmin(req, res, next) {
       sets.push(`partner_url = $${i++}`);
       vals.push(partnerUrl);
     }
+    if (partnerLinks !== null) {
+      sets.push(`partner_links_json = $${i++}`);
+      vals.push(JSON.stringify(partnerLinks));
+      const first = partnerLinks[0] || null;
+      sets.push(`partner_name = $${i++}`);
+      vals.push(first ? first.name : "");
+      sets.push(`partner_url = $${i++}`);
+      vals.push(first ? first.url : "");
+    }
     if (sets.length === 0) {
       throw new HttpError(400, "Keine Felder.");
     }
@@ -166,6 +241,7 @@ async function patchAppSettingsAdmin(req, res, next) {
 
     const row = await readRow();
     const u = await query(`SELECT updated_at FROM app_config WHERE id = 1`);
+    const normalizedPartnerLinks = parsePartnerLinksJson(row.partner_links_json);
     res.json({
       settings: {
         min_native_version: row.min_native_version,
@@ -173,6 +249,7 @@ async function patchAppSettingsAdmin(req, res, next) {
         maintenance_message: row.maintenance_message || "",
         partner_name: row.partner_name || "",
         partner_url: row.partner_url || "",
+        partner_links: normalizedPartnerLinks,
         updated_at: u.rows[0]?.updated_at || null,
       },
     });

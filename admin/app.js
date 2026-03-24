@@ -307,8 +307,13 @@ const API =
         const s = data.settings;
         const mv = escapeHtml(s.min_native_version);
         const mm = escapeHtml(s.maintenance_message);
-        const pn = escapeHtml(s.partner_name || "");
-        const pu = escapeHtml(s.partner_url || "");
+        const partnerRows = Array.isArray(s.partner_links) ? s.partner_links : [];
+        const partnerLinksText = escapeHtml(
+          partnerRows
+            .map((p) => `${String(p?.name || "").trim()}|${String(p?.url || "").trim()}`)
+            .filter((line) => line !== "|" && line.trim().length > 0)
+            .join("\n")
+        );
         el.innerHTML = `
           <div class="panel">
             <div class="panel-header">
@@ -322,9 +327,10 @@ const API =
             </label>
             <label>Wartungstext (in der App)<textarea id="maint-msg" rows="6">${mm}</textarea></label>
             <hr style="margin:1rem 0; border:none; border-top:1px solid var(--border);" />
-            <h3 style="margin:0 0 0.6rem; font-size:0.95rem;">Partner im App-Footer</h3>
-            <label>Partner-Name (optional)<input type="text" id="partner-name" value="${pn}" placeholder="z. B. Test Partner" /></label>
-            <label>Partner-Link (optional)<input type="url" id="partner-url" value="${pu}" placeholder="https://example.com" /></label>
+            <h3 style="margin:0 0 0.6rem; font-size:0.95rem;">Partner im App-Footer (mehrere)</h3>
+            <label>Partner-Liste (eine Zeile: Name|https://... )
+              <textarea id="partner-links" rows="6" placeholder="Test|https://example.com&#10;Sponsor 2|https://foo.bar">${partnerLinksText}</textarea>
+            </label>
             <button type="button" id="btn-save-app">Speichern</button>
             <p id="app-save-msg" class="muted"></p>
           </div>`;
@@ -333,14 +339,29 @@ const API =
           msg.textContent = "";
           msg.style.color = "";
           try {
+            const lines = String(document.getElementById("partner-links").value || "")
+              .split(/\r?\n/)
+              .map((s) => s.trim())
+              .filter(Boolean);
+            const partner_links = lines.map((line) => {
+              const sep = line.indexOf("|");
+              if (sep < 1) {
+                throw new Error("Partner-Zeile ungültig. Format: Name|https://...");
+              }
+              const name = line.slice(0, sep).trim();
+              const url = line.slice(sep + 1).trim();
+              if (!name || !url) {
+                throw new Error("Partner-Zeile unvollständig. Format: Name|https://...");
+              }
+              return { name, url };
+            });
             await api("/app-settings", {
               method: "PATCH",
               body: JSON.stringify({
                 min_native_version: document.getElementById("min-ver").value.trim(),
                 maintenance_enabled: document.getElementById("maint-enabled").checked,
                 maintenance_message: document.getElementById("maint-msg").value,
-                partner_name: document.getElementById("partner-name").value.trim(),
-                partner_url: document.getElementById("partner-url").value.trim(),
+                partner_links,
               }),
             });
             msg.textContent = "Gespeichert.";
